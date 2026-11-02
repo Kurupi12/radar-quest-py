@@ -1,0 +1,976 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import {
+  AlertTriangle,
+  Bell,
+  BellRing,
+  Camera,
+  Car,
+  Compass,
+  Flame,
+  Gamepad2,
+  Gift,
+  Lock,
+  MapPin,
+  Radio,
+  ShieldAlert,
+  Snowflake,
+  Sun,
+  Thermometer,
+  Users,
+  Volume2,
+  VolumeX,
+  Zap,
+} from "lucide-react";
+import type {
+  Hunter,
+  PublicBrand,
+  PublicMission,
+  RadarPingResponse,
+  ThermalState,
+} from "@/types/radar";
+import { ArcadeMap } from "@/components/radar/ArcadeMap";
+import { RadarCanvasOverlay } from "@/components/radar/RadarCanvasOverlay";
+import { OnboardingModal } from "@/components/radar/OnboardingModal";
+import { QrClaimModal } from "@/components/radar/QrClaimModal";
+import { ArcadeQrScannerModal } from "@/components/radar/ArcadeQrScannerModal";
+import { ViralRecorder } from "@/components/radar/ViralRecorder";
+import { BrandIconSvg } from "@/components/icons/BrandIconSvg";
+import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
+
+interface RadarGameClientProps {
+  initialBrand: PublicBrand;
+  initialMissions: PublicMission[];
+  initialMissionId?: string;
+  autoOpenClaimToken?: string;
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const buffer = new ArrayBuffer(rawData.length);
+  const outputArray = new Uint8Array(buffer);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+function getThermalBadgeStyle(state: ThermalState): {
+  bg: string;
+  border: string;
+  text: string;
+  label: string;
+} {
+  switch (state) {
+    case "QUEMANDO":
+      return {
+        bg: "rgba(220, 38, 38, 0.92)",
+        border: "#fde047",
+        text: "#fef08a",
+        label: "¡QUEMANDO! (<30M) ¡ESCANEÁ EL QR!",
+      };
+    case "CALIENTE":
+      return {
+        bg: "rgba(234, 88, 12, 0.9)",
+        border: "#fb923c",
+        text: "#ffedd5",
+        label: "CALIENTE • MUY CERCA",
+      };
+    case "TIBIO":
+      return {
+        bg: "rgba(161, 98, 7, 0.88)",
+        border: "#facc15",
+        text: "#fef9c3",
+        label: "TIBIO • EN ZONA DE RASTREO",
+      };
+    case "CONGELADO":
+      return {
+        bg: "rgba(3, 105, 161, 0.88)",
+        border: "#38bdf8",
+        text: "#e0f2fe",
+        label: "CONGELADO • LEJOS DEL PUNTO",
+      };
+    case "TELEPORT_ANOMALY":
+      return {
+        bg: "rgba(127, 29, 29, 0.95)",
+        border: "#ef4444",
+        text: "#fecaca",
+        label: "TELEPORT_ANOMALY DETECTADO",
+      };
+    case "FUERA DE ZONA":
+    default:
+      return {
+        bg: "rgba(30, 17, 58, 0.9)",
+        border: "#a855f7",
+        text: "#e9d5ff",
+        label: "FUERA DE ZONA • ACERCATE A LA CIUDAD",
+      };
+  }
+}
+
+function ThermalStatusIcon({ state }: { state: ThermalState }) {
+  switch (state) {
+    case "QUEMANDO":
+      return <Flame className="w-3.5 h-3.5 shrink-0" />;
+    case "CALIENTE":
+      return <Thermometer className="w-3.5 h-3.5 shrink-0" />;
+    case "TIBIO":
+      return <Zap className="w-3.5 h-3.5 shrink-0" />;
+    case "CONGELADO":
+      return <Snowflake className="w-3.5 h-3.5 shrink-0" />;
+    case "TELEPORT_ANOMALY":
+      return <ShieldAlert className="w-3.5 h-3.5 shrink-0" />;
+    case "FUERA DE ZONA":
+    default:
+      return <Radio className="w-3.5 h-3.5 shrink-0" />;
+  }
+}
+
+export function RadarGameClient({
+  initialBrand,
+  initialMissions,
+  initialMissionId,
+  autoOpenClaimToken,
+}: RadarGameClientProps) {
+  const [brand] = useState<PublicBrand>(initialBrand);
+  const [missions, setMissions] = useState<PublicMission[]>(initialMissions);
+  const [selectedMissionId, setSelectedMissionId] = useState<string>(() => {
+    if (
+      initialMissionId &&
+      initialMissions.some((m) => m.id === initialMissionId)
+    ) {
+      return initialMissionId;
+    }
+    return (
+      initialMissions.find((m) => m.status === "ACTIVE")?.id ||
+      initialMissions[0]?.id ||
+      ""
+    );
+  });
+
+  const selectedMission =
+    missions.find((m) => m.id === selectedMissionId) || missions[0] || null;
+
+  const [hunter, setHunter] = useState<Hunter | null>(null);
+  const [sessionToken, setSessionToken] = useState<string>("");
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  const [coords, setCoords] = useState<{
+    lat: number;
+    lng: number;
+    accuracy: number;
+  }>({
+    lat: selectedMission?.publicCenterLat ?? -27.3306,
+    lng: selectedMission?.publicCenterLng ?? -55.8667,
+    accuracy: 12,
+  });
+
+  const [gpsMode, setGpsMode] = useState<"real" | "simulator">("real");
+  const [showSimBar, setShowSimBar] = useState(false);
+  const [demoQrHint, setDemoQrHint] = useState<string>(
+    autoOpenClaimToken || ""
+  );
+
+  const [pingData, setPingData] = useState<RadarPingResponse | null>(null);
+  const [muted, setMuted] = useState(false);
+  const [wakeLockActive, setWakeLockActive] = useState(false);
+
+  // Web Push Drop Alerts State
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushBannerMsg, setPushBannerMsg] = useState<string | null>(null);
+
+  // External camera URL deep-link modal (/b/[brand]/claim?token=...)
+  const [showExternalClaimModal, setShowExternalClaimModal] = useState(
+    Boolean(autoOpenClaimToken)
+  );
+  // Phase 2 In-App Retro-Arcade Camera Scanner (enabled ONLY in QUEMANDO & <20 km/h)
+  const [showInAppScanner, setShowInAppScanner] = useState(false);
+
+  const mapCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const coordsRef = useRef(coords);
+  coordsRef.current = coords;
+
+  // 1. Restore session from localStorage & verify HMAC cookie
+  useEffect(() => {
+    let cancelled = false;
+
+    const restore = async () => {
+      try {
+        const cached = localStorage.getItem("rq_hunter_profile");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed?.hunter?.id) {
+            if (!brand.requireAdult18 || parsed.hunter.isAdult18) {
+              setHunter(parsed.hunter);
+              setSessionToken(parsed.sessionToken || "");
+            }
+          }
+        }
+
+        const res = await fetch("/api/auth/onboard");
+        const data = await res.json();
+        if (!cancelled && data?.authenticated && data?.hunter) {
+          if (!brand.requireAdult18 || data.hunter.isAdult18) {
+            setHunter(data.hunter);
+          }
+        }
+      } catch {
+        // Ignore offline check
+      } finally {
+        if (!cancelled) setCheckingSession(false);
+      }
+    };
+
+    restore();
+    return () => {
+      cancelled = true;
+    };
+  }, [brand.requireAdult18]);
+
+  // Check existing Web Push subscription state
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window)
+    ) {
+      return;
+    }
+
+    navigator.serviceWorker
+      .getRegistration("/service-worker.js")
+      .then((reg) => reg?.pushManager.getSubscription())
+      .then((sub) => {
+        if (sub) setPushSubscribed(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Subscribe to Web Push Drops for current Brand & City
+  const handleSubscribeDropsPush = async () => {
+    if (
+      typeof window === "undefined" ||
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window) ||
+      !("Notification" in window)
+    ) {
+      setPushBannerMsg("Web Push no soportado en este navegador.");
+      return;
+    }
+
+    setPushLoading(true);
+    setPushBannerMsg(null);
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushBannerMsg(
+          "Habilitá el permiso de notificaciones para recibir alertas de Drops."
+        );
+        setPushLoading(false);
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.register(
+        "/service-worker.js"
+      );
+      await navigator.serviceWorker.ready;
+
+      const vapidRes = await fetch("/api/push/vapid");
+      const vapidJson = await vapidRes.json();
+      if (!vapidJson?.publicKey) {
+        throw new Error("Clave VAPID no disponible.");
+      }
+
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidJson.publicKey),
+        });
+      }
+
+      const targetCity = selectedMission?.city || brand.cityDefault;
+      const saveRes = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brandSlug: brand.slug,
+          city: targetCity,
+          hunterId: hunter?.id || null,
+          subscription: subscription.toJSON(),
+        }),
+      });
+      const saveJson = await saveRes.json();
+      if (saveJson.ok) {
+        setPushSubscribed(true);
+        setPushBannerMsg(`Alertas activadas para nuevos Drops en ${targetCity}.`);
+        arcadeHardware.playPowerUpOnboarding();
+        window.setTimeout(() => setPushBannerMsg(null), 3500);
+      }
+    } catch {
+      setPushBannerMsg("No se pudo activar Web Push en este dispositivo.");
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  // 2. Request & keep Screen Wake Lock active
+  useEffect(() => {
+    if (!hunter) return;
+    arcadeHardware.requestWakeLock().then(setWakeLockActive);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        arcadeHardware.requestWakeLock().then(setWakeLockActive);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [hunter]);
+
+  // 3. Re-center map on mission switch
+  useEffect(() => {
+    if (selectedMission) {
+      setPingData(null);
+      if (gpsMode === "simulator") {
+        setCoords({
+          lat: selectedMission.publicCenterLat,
+          lng: selectedMission.publicCenterLng,
+          accuracy: 10,
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMissionId]);
+
+  // 4. Send Telemetry Ping to Server
+  const sendRadarPing = useCallback(
+    async (targetCoords: { lat: number; lng: number; accuracy: number }) => {
+      if (!hunter || !selectedMission) return;
+
+      try {
+        const res = await fetch("/api/radar/ping", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            missionId: selectedMission.id,
+            brandSlug: brand.slug,
+            lat: targetCoords.lat,
+            lng: targetCoords.lng,
+            accuracy: targetCoords.accuracy,
+            hunterId: hunter.id,
+            alias: hunter.alias,
+            sessionToken,
+          }),
+        });
+
+        const data = (await res.json()) as RadarPingResponse;
+        if (data.ok) {
+          setPingData(data);
+          if (data.dangerAlert?.active) {
+            arcadeHardware.playRivalDangerSiren();
+          } else {
+            arcadeHardware.triggerThermalFeedback(data.thermalState);
+          }
+
+          if (data.missionStatus === "CAPTURED") {
+            setMissions((prev) =>
+              prev.map((m) =>
+                m.id === selectedMission.id
+                  ? {
+                      ...m,
+                      status: "CAPTURED",
+                      winnerAlias: data.winnerAlias,
+                    }
+                  : m
+              )
+            );
+          }
+        }
+      } catch {
+        // Silent retry on next cycle
+      }
+    },
+    [hunter, selectedMission, brand.slug, sessionToken]
+  );
+
+  // 5. Real High-Accuracy Geolocation Watcher + 4s Heartbeat Ping
+  useEffect(() => {
+    if (!hunter || !selectedMission || gpsMode !== "real") return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const next = {
+          lat: Number(pos.coords.latitude.toFixed(6)),
+          lng: Number(pos.coords.longitude.toFixed(6)),
+          accuracy: Math.round(pos.coords.accuracy || 12),
+        };
+        setCoords(next);
+      },
+      () => {},
+      {
+        enableHighAccuracy: true,
+        maximumAge: 2500,
+        timeout: 8000,
+      }
+    );
+
+    sendRadarPing(coordsRef.current);
+    const interval = window.setInterval(() => {
+      sendRadarPing(coordsRef.current);
+    }, 4000);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      window.clearInterval(interval);
+    };
+  }, [hunter, selectedMission, gpsMode, sendRadarPing]);
+
+  const triggerDemoStep = async (
+    preset:
+      | "CONGELADO"
+      | "TIBIO"
+      | "CALIENTE"
+      | "QUEMANDO"
+      | "VEHICLE"
+      | "TELEPORT"
+  ) => {
+    if (!selectedMission) return;
+    setGpsMode("simulator");
+
+    try {
+      const res = await fetch("/api/radar/demo-step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          missionId: selectedMission.id,
+          preset,
+        }),
+      });
+      const step = await res.json();
+      if (step.ok) {
+        const nextCoords = {
+          lat: step.lat,
+          lng: step.lng,
+          accuracy: step.accuracy,
+        };
+        setCoords(nextCoords);
+        if (step.demoQrCode) setDemoQrHint(step.demoQrCode);
+        await sendRadarPing(nextCoords);
+      }
+    } catch {}
+  };
+
+  const toggleAudio = () => {
+    const next = !muted;
+    setMuted(next);
+    arcadeHardware.setMuted(next);
+  };
+
+  const currentThermal: ThermalState =
+    pingData?.thermalState || "FUERA DE ZONA";
+  const thermalStyle = getThermalBadgeStyle(currentThermal);
+
+  // Strict Phase 2 Rule: Enable QR Scanner ONLY when thermalState === 'QUEMANDO' (<30m and speed <20 km/h)
+  const canOpenScanner = Boolean(
+    pingData?.canOpenQrScanner ??
+      (currentThermal === "QUEMANDO" &&
+        !pingData?.inVehicleMode &&
+        (pingData?.speedKmh ?? 0) < 20)
+  );
+
+  return (
+    <div
+      className="min-h-[100dvh] w-full bg-[#090414] flex flex-col md:flex-row items-center justify-center md:gap-6 md:p-4 overflow-hidden"
+      style={
+        {
+          "--brand-primary": brand.primaryColor,
+          "--brand-secondary": brand.secondaryColor,
+        } as React.CSSProperties
+      }
+    >
+      {/* 9:16 VERTICAL ARCADE MOBILE VIEWPORT (Logical 360x640 -> 1080x1920) */}
+      <main
+        className="relative w-full h-[100dvh] md:w-[420px] md:h-[min(94dvh,860px)] md:rounded-2xl md:border-4 overflow-hidden flex flex-col bg-[#140b29] shadow-[0_0_50px_rgba(168,85,247,0.3)]"
+        style={{ borderColor: brand.primaryColor }}
+      >
+        <div className="relative flex-1 w-full h-full">
+          <ArcadeMap
+            centerLat={coords.lat}
+            centerLng={coords.lng}
+            zoom={16.2}
+            primaryColor={brand.primaryColor}
+            secondaryColor={brand.secondaryColor}
+            mode="player"
+            onCanvasReady={(c) => {
+              mapCanvasRef.current = c;
+            }}
+          />
+
+          <RadarCanvasOverlay
+            thermalState={currentThermal}
+            inVehicleMode={Boolean(pingData?.inVehicleMode)}
+            dangerAlertActive={Boolean(pingData?.dangerAlert?.active)}
+            primaryColor={brand.primaryColor}
+            secondaryColor={brand.secondaryColor}
+            onCanvasReady={(c) => {
+              overlayCanvasRef.current = c;
+            }}
+          />
+
+          <div className="crt-scanlines pointer-events-none absolute inset-0 z-10 opacity-45" />
+
+          {/* TOP HUD */}
+          <header className="absolute top-0 inset-x-0 z-20 p-2.5 space-y-2 bg-gradient-to-b from-[#0c051c]/95 via-[#0c051c]/75 to-transparent">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 text-cyan-300"
+                  style={{
+                    borderColor: brand.primaryColor,
+                    backgroundColor: `${brand.primaryColor}25`,
+                  }}
+                >
+                  <BrandIconSvg
+                    iconKey={brand.logoEmoji}
+                    className="w-4 h-4"
+                  />
+                </div>
+                <div className="truncate">
+                  <div className="flex items-center gap-1.5">
+                    <h1 className="font-extrabold text-xs uppercase tracking-wider text-white truncate">
+                      {brand.name}
+                    </h1>
+                    {brand.requireAdult18 && (
+                      <span className="px-1.5 py-0.5 text-[9px] font-extrabold rounded bg-amber-400 text-slate-950">
+                        +18
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-cyan-300 truncate flex items-center gap-1">
+                    {hunter ? (
+                      <>
+                        <span>{hunter.alias}</span>
+                        <span>•</span>
+                        {wakeLockActive && (
+                          <Sun className="w-2.5 h-2.5 text-amber-300 shrink-0" />
+                        )}
+                        <span>
+                          {wakeLockActive ? "WakeLock ON" : "GPS Activo"}
+                        </span>
+                      </>
+                    ) : (
+                      <span>Radar Quest Paraguay</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 px-2 py-1 rounded bg-purple-950/90 border border-purple-500/50 text-[10px] font-bold text-cyan-300">
+                  <Users className="w-3 h-3" />
+                  <span>{pingData?.activeHuntersCount ?? 1}</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSubscribeDropsPush}
+                  disabled={pushLoading}
+                  className={`p-1.5 rounded border cursor-pointer transition ${
+                    pushSubscribed
+                      ? "bg-emerald-950/90 border-emerald-400/60 text-emerald-300"
+                      : "bg-slate-900/90 border-slate-700 text-amber-300 hover:border-amber-400"
+                  }`}
+                  title={
+                    pushSubscribed
+                      ? `Alertas Push activas en ${selectedMission?.city || brand.cityDefault}`
+                      : "Activar notificaciones Web Push para nuevos Drops en tu ciudad"
+                  }
+                >
+                  {pushSubscribed ? (
+                    <BellRing className="w-3.5 h-3.5" />
+                  ) : (
+                    <Bell className="w-3.5 h-3.5" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={toggleAudio}
+                  className="p-1.5 rounded bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-white cursor-pointer"
+                  title="Audio Chiptune 8-Bit"
+                >
+                  {muted ? (
+                    <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5 text-cyan-300" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {pushBannerMsg && (
+              <div className="px-2.5 py-1.5 rounded bg-emerald-950/95 border border-emerald-400 text-emerald-200 text-[10px] font-semibold flex items-center gap-1.5">
+                <BellRing className="w-3.5 h-3.5 shrink-0 text-emerald-300" />
+                <span>{pushBannerMsg}</span>
+              </div>
+            )}
+
+            {missions.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <MapPin
+                  className="w-3.5 h-3.5 shrink-0"
+                  style={{ color: brand.secondaryColor }}
+                />
+                <select
+                  value={selectedMissionId}
+                  onChange={(e) => setSelectedMissionId(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded bg-[#140b29]/95 border border-purple-500/60 text-white text-xs font-semibold focus:outline-none"
+                >
+                  {missions.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      [{m.city}] {m.title}{" "}
+                      {m.status === "CAPTURED" ? "(CAPTURADO)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div
+              className="px-3 py-2 rounded-lg border-2 text-center shadow-lg transition-all flex items-center justify-center gap-2"
+              style={{
+                backgroundColor: thermalStyle.bg,
+                borderColor: thermalStyle.border,
+                color: thermalStyle.text,
+              }}
+            >
+              <ThermalStatusIcon state={currentThermal} />
+              <p className="font-pixel text-[9px] leading-relaxed">
+                {thermalStyle.label}
+              </p>
+            </div>
+
+            {pingData?.dangerAlert?.active && (
+              <div className="px-3 py-1.5 rounded bg-red-600/95 border-2 border-yellow-300 text-white text-[11px] font-extrabold flex items-center gap-2 animate-pulse shadow-lg">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-yellow-300" />
+                <span>{pingData.dangerAlert.message}</span>
+              </div>
+            )}
+
+            {pingData?.inVehicleMode && pingData.vehicleMessage && (
+              <div className="px-2.5 py-1.5 rounded bg-amber-950/95 border border-amber-400 text-amber-200 text-[11px] flex items-start gap-2">
+                <Car className="w-4 h-4 shrink-0 text-amber-300 mt-0.5" />
+                <span>{pingData.vehicleMessage}</span>
+              </div>
+            )}
+
+            {pingData?.thermalState === "TELEPORT_ANOMALY" &&
+              pingData.anomalyMessage && (
+                <div className="px-2.5 py-1.5 rounded bg-red-950/95 border border-red-400 text-red-200 text-[11px] flex items-start gap-2">
+                  <ShieldAlert className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />
+                  <span>{pingData.anomalyMessage}</span>
+                </div>
+              )}
+          </header>
+
+          {/* BOTTOM ARCADE CONTROLS */}
+          <footer className="absolute bottom-0 inset-x-0 z-20 p-2.5 space-y-2 bg-gradient-to-t from-[#090314] via-[#0d061f]/95 to-transparent">
+            {selectedMission && (
+              <div className="p-2.5 rounded-lg bg-[#140b29]/95 border border-purple-500/40 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 text-[10px]">
+                  <span className="font-bold uppercase text-amber-300 truncate flex items-center gap-1.5">
+                    <Gift className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">
+                      {selectedMission.prizeTitle}
+                    </span>
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded font-mono font-bold shrink-0 ${
+                      pingData?.proofOfHuntProgress?.ready
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/50"
+                        : "bg-slate-800 text-slate-300"
+                    }`}
+                  >
+                    Rastreo:{" "}
+                    {pingData?.proofOfHuntProgress?.currentValidPings ?? 0}/
+                    {selectedMission.minPingsForMajorPrize}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-snug">
+                  <strong className="text-cyan-300">Pista:</strong>{" "}
+                  {selectedMission.zoneHint}
+                </p>
+              </div>
+            )}
+
+            {showSimBar && (
+              <div className="p-2 rounded-lg bg-slate-950/95 border border-cyan-500/50 space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] text-cyan-300 font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <Gamepad2 className="w-3.5 h-3.5" />
+                    <span>SIMULADOR QA (MODO DEMO PC)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setGpsMode("real")}
+                    className={`px-1.5 py-0.5 rounded cursor-pointer ${
+                      gpsMode === "real"
+                        ? "bg-cyan-400 text-slate-950"
+                        : "bg-slate-800 text-slate-300"
+                    }`}
+                  >
+                    Usar GPS Real
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-1 text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => triggerDemoStep("CONGELADO")}
+                    className="py-1 px-1.5 rounded bg-sky-900/80 hover:bg-sky-800 text-sky-200 border border-sky-500/40 cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <Snowflake className="w-3 h-3" />
+                    <span>Congelado</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => triggerDemoStep("TIBIO")}
+                    className="py-1 px-1.5 rounded bg-yellow-900/80 hover:bg-yellow-800 text-yellow-200 border border-yellow-500/40 cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <Zap className="w-3 h-3" />
+                    <span>Tibio</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => triggerDemoStep("CALIENTE")}
+                    className="py-1 px-1.5 rounded bg-orange-900/80 hover:bg-orange-800 text-orange-200 border border-orange-500/40 cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <Thermometer className="w-3 h-3" />
+                    <span>Caliente</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => triggerDemoStep("QUEMANDO")}
+                    className="py-1 px-1.5 rounded bg-red-700/90 hover:bg-red-600 text-yellow-200 border border-yellow-400 cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <Flame className="w-3 h-3" />
+                    <span>¡Quemando!</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => triggerDemoStep("VEHICLE")}
+                    className="py-1 px-1.5 rounded bg-amber-900/80 hover:bg-amber-800 text-amber-200 border border-amber-500/40 cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <Car className="w-3 h-3" />
+                    <span>Auto 75km/h</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => triggerDemoStep("TELEPORT")}
+                    className="py-1 px-1.5 rounded bg-purple-950 hover:bg-purple-900 text-pink-300 border border-pink-500/50 cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <ShieldAlert className="w-3 h-3" />
+                    <span>Teleport</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons Row */}
+            <div className="flex items-center justify-between gap-2">
+              <ViralRecorder
+                brand={brand}
+                mission={selectedMission}
+                hunterAlias={hunter?.alias || "@cazador"}
+                thermalState={currentThermal}
+                activeHunters={pingData?.activeHuntersCount ?? 1}
+                getMapCanvas={() => mapCanvasRef.current}
+                getOverlayCanvas={() => overlayCanvasRef.current}
+              />
+
+              <div className="flex items-center gap-1.5">
+                {(process.env.NODE_ENV !== "production" ||
+                  (typeof window !== "undefined" &&
+                    window.location.search.includes("debug=1"))) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSimBar((s) => !s)}
+                    className="p-2 rounded bg-slate-900/95 border border-slate-700 text-cyan-300 hover:border-cyan-400 cursor-pointer"
+                    title="Simulador GPS QA"
+                  >
+                    <Gamepad2 className="w-4 h-4" />
+                  </button>
+                )}
+
+                {/* PHASE 2 IN-APP CAMERA SCANNER: Interactive ONLY when QUEMANDO (<30m & <20 km/h) */}
+                {canOpenScanner ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowInAppScanner(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-extrabold text-xs uppercase text-slate-950 bg-amber-300 hover:bg-amber-200 border-2 border-white shadow-[0_0_18px_rgba(253,224,71,0.85)] animate-pulse active:scale-95 transition cursor-pointer"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>ESCANEAR QR</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="flex items-center gap-1 px-2.5 py-2 rounded-lg font-bold text-[10px] uppercase bg-slate-900/90 border border-slate-700 text-slate-500 cursor-not-allowed select-none"
+                    title="Se habilita únicamente en estado ¡QUEMANDO! (<30m y a pie <20 km/h)"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>ESCANEAR (&lt;30M)</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </footer>
+
+          {/* 3-SECOND ARCADE ONBOARDING GATE */}
+          {!checkingSession && !hunter && (
+            <OnboardingModal
+              brand={brand}
+              sourceMissionId={selectedMission?.id || null}
+              onComplete={(registeredHunter, token) => {
+                setHunter(registeredHunter);
+                setSessionToken(token);
+              }}
+            />
+          )}
+
+          {/* PHASE 2 IN-APP RETRO-ARCADE CAMERA SCANNER OVERLAY */}
+          {showInAppScanner && hunter && (
+            <ArcadeQrScannerModal
+              brand={brand}
+              hunter={hunter}
+              sessionToken={sessionToken}
+              currentCoords={coords}
+              demoTokenHint={demoQrHint}
+              onClose={() => setShowInAppScanner(false)}
+              onClaimSuccess={(res) => {
+                if (res.claim?.claimType === "MAJOR_PRIZE" && selectedMission) {
+                  setMissions((prev) =>
+                    prev.map((m) =>
+                      m.id === selectedMission.id
+                        ? {
+                            ...m,
+                            status: "CAPTURED",
+                            winnerAlias: hunter.alias,
+                          }
+                        : m
+                    )
+                  );
+                }
+              }}
+            />
+          )}
+
+          {/* DIRECT EXTERNAL URL QR CLAIM MODAL (/b/[brand]/claim?token=...) */}
+          {showExternalClaimModal && hunter && (
+            <QrClaimModal
+              brand={brand}
+              hunter={hunter}
+              sessionToken={sessionToken}
+              currentCoords={coords}
+              suggestedCode={demoQrHint}
+              onClose={() => setShowExternalClaimModal(false)}
+            />
+          )}
+        </div>
+      </main>
+
+      {/* DESKTOP SIDEBAR COMPANION */}
+      <aside className="hidden lg:flex flex-col w-80 p-5 rounded-2xl bg-[#140b29]/90 border border-purple-500/40 space-y-4 text-slate-200">
+        <div>
+          <p className="font-pixel text-[10px] text-cyan-300 uppercase mb-1">
+            EMULACIÓN VERTICAL 9:16
+          </p>
+          <h2 className="text-lg font-extrabold text-white">
+            Radar Quest • {brand.name}
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            En celulares ocupa el 100dvh nativo con Wake Lock, alertas Web Push
+            por ciudad y escáner óptico en estado ¡QUEMANDO! (&lt;30m).
+          </p>
+        </div>
+
+        <div className="p-3 rounded-xl bg-[#0d061c] border border-purple-500/30 space-y-2 text-xs">
+          <div className="flex items-center gap-2 font-bold text-amber-300">
+            <Flame className="w-4 h-4" />
+            <span>Telemetría en Tiempo Real</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">Modo GPS:</span>
+            <span className="font-mono text-cyan-300 uppercase">{gpsMode}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">Velocidad:</span>
+            <span className="font-mono">{pingData?.speedKmh ?? 0} km/h</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">Escáner In-App:</span>
+            <span
+              className={`font-mono font-bold ${
+                canOpenScanner ? "text-amber-300" : "text-slate-500"
+              }`}
+            >
+              {canOpenScanner ? "DESBLOQUEADO" : "BLOQUEADO (>30m)"}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">Alertas Web Push:</span>
+            <span
+              className={`font-mono font-bold ${
+                pushSubscribed ? "text-emerald-300" : "text-amber-300"
+              }`}
+            >
+              {pushSubscribed ? "SUSCRIPTO" : "DISPONIBLE"}
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSubscribeDropsPush}
+          disabled={pushLoading}
+          className="w-full py-2.5 px-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-200 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition"
+        >
+          <BellRing className="w-4 h-4 text-emerald-300" />
+          <span>
+            {pushSubscribed
+              ? `Push Activo (${selectedMission?.city || brand.cityDefault})`
+              : `Activar Push en ${selectedMission?.city || brand.cityDefault}`}
+          </span>
+        </button>
+
+        <div className="space-y-2 pt-1">
+          <Link
+            href={`/b/${brand.slug}/admin`}
+            className="w-full py-2.5 px-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition"
+          >
+            <Radio className="w-4 h-4" />
+            <span>Panel Comercio (/b/{brand.slug}/admin)</span>
+          </Link>
+          <Link
+            href="/admin"
+            className="w-full py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-cyan-300 font-bold text-xs flex items-center justify-center gap-2 transition"
+          >
+            <Compass className="w-4 h-4" />
+            <span>Super-Admin (/admin)</span>
+          </Link>
+        </div>
+      </aside>
+    </div>
+  );
+}

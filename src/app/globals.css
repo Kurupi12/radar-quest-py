@@ -1,0 +1,70 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+:root {
+  --arcade-bg: #0f0722;
+  --arcade-water: #1a103c;
+  --arcade-block: #2d1b4e;
+  --brand-primary: #a855f7;
+  --brand-secondary: #00f0ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background-color: #0b0518;
+  color: #f8fafc;
+  margin: 0;
+  padding: 0;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.font-pixel {
+  font-family: var(--font-press-start), monospace;
+  letter-spacing: 0.03em;
+}
+
+.font-retro {
+  font-family: var(--font-vt323), monospace;
+}
+
+/* Force crisp 16-bit pixel rendering on canvases, map tiles & arcade sprites */
+.pixelated,
+.arcade-map-wrapper canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Subtle CRT Scanline Overlay */
+.crt-scanlines {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 50%,
+    rgba(0, 0, 0, 0.24) 50%
+  );
+  background-size: 100% 4px;
+}
+
+/* 16-bit stepped arcade border effect */
+.arcade-card {
+  background: rgba(20, 11, 41, 0.92);
+  border: 2px solid var(--brand-primary, #a855f7);
+  box-shadow:
+    0 0 0 2px #090314,
+    0 0 20px rgba(168, 85, 247, 0.28);
+}
+
+/* Hide noisy MapLibre attribution box bloat while keeping minimal legal compact toggle */
+.maplibregl-ctrl-attrib {
+  background: rgba(15, 7, 34, 0.7) !important;
+  color: #94a3b8 !important;
+  font-size: 9px !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: #cbd5e1 !important;
+}
+

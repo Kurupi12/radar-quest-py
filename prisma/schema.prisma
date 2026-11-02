@@ -1,0 +1,247 @@
+// ============================================================================
+// RADAR QUEST - SaaS Multimarca (White-Label) Caza del Tesoro QR (Paraguay)
+// Fase 3: Cloud PostgreSQL (Prisma) + Heatmap BI + Web Push Subscriptions
+// CeroUno Studio
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum MissionStatus {
+  DRAFT
+  ACTIVE
+  CAPTURED
+  PAUSED
+}
+
+enum ThermalState {
+  FUERA_DE_ZONA
+  CONGELADO
+  TIBIO
+  CALIENTE
+  QUEMANDO
+  TELEPORT_ANOMALY
+}
+
+enum ClaimType {
+  MAJOR_PRIZE
+  CONSOLATION_CURIOUS
+  CONSOLATION_LATE
+}
+
+model Brand {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  name            String
+  tagline         String
+  logoEmoji       String   @default("radar") // SVG Icon identifier key (zero emojis in UI)
+  logoUrl         String?
+  primaryColor    String   @default("#a855f7")
+  secondaryColor  String   @default("#00f0ff")
+  whatsapp        String
+  requireAdult18  Boolean  @default(true)
+  missionCredits  Int      @default(5)
+  cityDefault     String   @default("Encarnación")
+  adminPin        String   @default("420420") // PIN numérico de 6 dígitos para /b/[brand]/admin
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  missions          Mission[]
+  reusableNodes     ReusableQrNode[]
+  leads             BrandLead[]
+  claims            Claim[]
+  creditLedger      CreditTransaction[]
+  pushSubscriptions PushSubscription[]
+
+  @@index([slug])
+  @@index([active])
+}
+
+model ReusableQrNode {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  label             String
+  brandId           String
+  brand             Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  assignedMissionId String?
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+
+  @@index([brandId, active])
+  @@index([code])
+}
+
+model Mission {
+  id                     String        @id @default(cuid())
+  brandId                String
+  brand                  Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  title                  String
+  city                   String
+  zoneHint               String
+  secretLat              Float
+  secretLng              Float
+  publicCenterLat        Float
+  publicCenterLng        Float
+  captureRadiusMeters    Float         @default(35)
+  zoneRadiusMeters       Float         @default(3500)
+  qrToken                String        @unique
+  nodeCode               String?
+  prizeTitle             String
+  consolationTitle       String        @default("Cupón Explorador Curioso - 15% OFF")
+  minPingsForMajorPrize  Int           @default(3)
+  status                 MissionStatus @default(ACTIVE)
+  winnerHunterId         String?
+  winnerAlias            String?
+  winnerClaimCode        String?
+  capturedAt             DateTime?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  hunterPings            HunterPing[]
+  telemetryStates        HunterMissionTelemetry[]
+  claims                 Claim[]
+
+  @@index([brandId, status])
+  @@index([qrToken])
+  @@index([brandId, nodeCode])
+}
+
+model Hunter {
+  id          String   @id @default(cuid())
+  alias       String
+  whatsapp    String   @unique
+  isAdult18   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  leads       BrandLead[]
+  pings       HunterPing[]
+  telemetry   HunterMissionTelemetry[]
+  claims      Claim[]
+
+  @@index([whatsapp])
+}
+
+model HunterPing {
+  id             String       @id @default(cuid())
+  missionId      String
+  mission        Mission      @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  hunterId       String
+  hunter         Hunter       @relation(fields: [hunterId], references: [id], onDelete: Cascade)
+  alias          String
+  lat            Float
+  lng            Float
+  accuracy       Float
+  distanceMeters Float
+  speedKmh       Float        @default(0)
+  inVehicleMode  Boolean      @default(false)
+  isAnomaly      Boolean      @default(false)
+  thermalState   ThermalState
+  createdAt      DateTime     @default(now())
+
+  @@index([missionId, hunterId, createdAt(sort: Desc)])
+  @@index([missionId, createdAt(sort: Desc)])
+  @@index([missionId, isAnomaly, distanceMeters])
+}
+
+model HunterMissionTelemetry {
+  id                 String       @id @default(cuid())
+  missionId          String
+  mission            Mission      @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  hunterId           String
+  hunter             Hunter       @relation(fields: [hunterId], references: [id], onDelete: Cascade)
+  alias              String
+  lastLat            Float
+  lastLng            Float
+  lastAccuracy       Float
+  lastDistanceMeters Float
+  speedKmh           Float        @default(0)
+  inVehicleMode      Boolean      @default(false)
+  thermalState       ThermalState @default(FUERA_DE_ZONA)
+  pingCount          Int          @default(1)
+  validHuntPings     Int          @default(0)
+  anomalyFlags       Int          @default(0)
+  firstPingAt        DateTime     @default(now())
+  lastPingAt         DateTime     @default(now())
+
+  @@unique([missionId, hunterId])
+  @@index([missionId, lastPingAt(sort: Desc)])
+  @@index([missionId, lastDistanceMeters])
+}
+
+model Claim {
+  id                     String    @id @default(cuid())
+  missionId              String
+  mission                Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  brandId                String
+  brand                  Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  hunterId               String
+  hunter                 Hunter    @relation(fields: [hunterId], references: [id], onDelete: Cascade)
+  alias                  String
+  whatsapp               String
+  claimType              ClaimType
+  couponCode             String    @unique
+  prizeLabel             String
+  distanceAtClaimMeters  Float
+  accuracyAtClaimMeters  Float
+  effectiveRadiusMeters  Float
+  proofOfHuntPassed      Boolean
+  whatsappRedeemUrl      String
+  claimedAt              DateTime  @default(now())
+
+  @@index([missionId, hunterId])
+  @@index([missionId, claimType])
+  @@index([brandId, claimedAt(sort: Desc)])
+}
+
+model BrandLead {
+  id              String   @id @default(cuid())
+  brandId         String
+  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  hunterId        String
+  hunter          Hunter   @relation(fields: [hunterId], references: [id], onDelete: Cascade)
+  alias           String
+  whatsapp        String
+  isAdult18       Boolean
+  sourceMissionId String?
+  city            String?
+  createdAt       DateTime @default(now())
+
+  @@unique([brandId, whatsapp])
+  @@index([brandId, createdAt(sort: Desc)])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  city      String
+  hunterId  String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([brandId, city, active])
+}
+
+model CreditTransaction {
+  id          String   @id @default(cuid())
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  delta       Int
+  reason      String
+  performedBy String   @default("CeroUno Studio Super-Admin")
+  createdAt   DateTime @default(now())
+
+  @@index([brandId, createdAt(sort: Desc)])
+}
