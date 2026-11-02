@@ -18,6 +18,7 @@
     "@prisma/client": "^6.19.3",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
+    "fix-webm-duration": "^1.0.6",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.66.0",
     "maplibre-gl": "^6.16.0",

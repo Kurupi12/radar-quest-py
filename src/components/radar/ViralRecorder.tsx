@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Circle, Download, Share2, Square, Video } from "lucide-react";
+import fixWebmDuration from "fix-webm-duration";
 import type { Brand, PublicBrand, PublicMission, ThermalState } from "@/types/radar";
 
 interface ViralRecorderProps {
@@ -14,10 +15,10 @@ interface ViralRecorderProps {
   getOverlayCanvas: () => HTMLCanvasElement | null;
 }
 
-// 9:16 Vertical Story format optimized for real-time 30 FPS capture without frame drops
+// 9:16 Vertical Story format for Instagram / TikTok Stories (15 seconds standard)
 const STORY_WIDTH = 540;
 const STORY_HEIGHT = 960;
-const MAX_RECORDING_SECONDS = 30;
+const INSTAGRAM_STORY_SECONDS = 15;
 
 export function ViralRecorder({
   brand,
@@ -231,10 +232,35 @@ export function ViralRecorder({
     animIdRef.current = window.requestAnimationFrame(renderLoop);
 
     const stream = compositeCanvas.captureStream(30);
+
+    // Attach a synchronized silent audio track so Instagram/WhatsApp recognizes it as native video with sound
+    let audioCtx: AudioContext | null = null;
+    try {
+      const AudioCtxClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      if (AudioCtxClass) {
+        audioCtx = new AudioCtxClass();
+        const dest = audioCtx.createMediaStreamDestination();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        gain.gain.value = 0.0001;
+        osc.connect(gain);
+        gain.connect(dest);
+        osc.start();
+        const audioTrack = dest.stream.getAudioTracks()[0];
+        if (audioTrack) {
+          stream.addTrack(audioTrack);
+        }
+      }
+    } catch {}
+
     const mimeCandidates = [
+      "video/mp4;codecs=avc1,mp4a.40.2",
       "video/mp4",
-      "video/webm;codecs=vp9",
-      "video/webm;codecs=vp8",
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
       "video/webm",
     ];
     const selectedMime =
@@ -253,7 +279,9 @@ export function ViralRecorder({
       if (ev.data && ev.data.size > 0) chunks.push(ev.data);
     };
 
-    recorder.onstop = () => {
+    const startTimestamp = Date.now();
+
+    recorder.onstop = async () => {
       if (animIdRef.current) {
         window.cancelAnimationFrame(animIdRef.current);
         animIdRef.current = null;
@@ -262,7 +290,25 @@ export function ViralRecorder({
         window.clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      const finalBlob = new Blob(chunks, { type: selectedMime });
+      try {
+        if (audioCtx && audioCtx.state !== "closed") {
+          audioCtx.close();
+        }
+      } catch {}
+
+      const durationMs = Math.max(1000, Date.now() - startTimestamp);
+      const rawBlob = new Blob(chunks, { type: selectedMime });
+
+      // Fix WebM header duration metadata so Instagram/TikTok sees full 15s instead of 3-4s
+      let finalBlob = rawBlob;
+      if (selectedMime.includes("webm")) {
+        try {
+          finalBlob = await fixWebmDuration(rawBlob, durationMs);
+        } catch {
+          finalBlob = rawBlob;
+        }
+      }
+
       setRecordedBlob(finalBlob);
       setIsRecording(false);
     };
@@ -274,9 +320,9 @@ export function ViralRecorder({
 
     timerRef.current = window.setInterval(() => {
       setSecondsElapsed((prev) => {
-        if (prev >= MAX_RECORDING_SECONDS - 1) {
+        if (prev >= INSTAGRAM_STORY_SECONDS - 1) {
           recorder.stop();
-          return MAX_RECORDING_SECONDS;
+          return INSTAGRAM_STORY_SECONDS;
         }
         return prev + 1;
       });
@@ -343,7 +389,7 @@ export function ViralRecorder({
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-red-500 border-2 border-yellow-300 text-white text-[10px] font-bold uppercase animate-pulse cursor-pointer"
         >
           <Square className="w-3 h-3 fill-white" />
-          <span>REC 00:{String(secondsElapsed).padStart(2, "0")}/{MAX_RECORDING_SECONDS}s (PARAR)</span>
+          <span>REC 00:{String(secondsElapsed).padStart(2, "0")}/{INSTAGRAM_STORY_SECONDS}s (PARAR)</span>
         </button>
       )}
 
