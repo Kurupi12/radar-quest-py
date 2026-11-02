@@ -257,39 +257,48 @@ export function ArcadeMap({
           continue;
         }
 
-        // 2. Background & Urban Blocks
+        // 2. High-Contrast Multicolor Geographical Elements
         if (layer.type === "background") {
           try {
-            map.setPaintProperty(layer.id, "background-color", "#0e0622");
+            map.setPaintProperty(layer.id, "background-color", "#080d1a");
           } catch {}
         }
 
         if (layer.type === "fill") {
           if (id.includes("water")) {
+            // Rivers, Lakes & Bays: Electric Cobalt / Deep Cyan
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#0b193d");
-            } catch {}
-          } else if (id.includes("building")) {
-            try {
-              map.setPaintProperty(layer.id, "fill-color", "#25123d");
-              map.setPaintProperty(layer.id, "fill-outline-color", "#581c87");
+              map.setPaintProperty(layer.id, "fill-color", "#0369a1");
+              map.setPaintProperty(layer.id, "fill-opacity", 0.95);
             } catch {}
           } else if (
             id.includes("park") ||
             id.includes("landuse") ||
-            id.includes("landcover")
+            id.includes("landcover") ||
+            id.includes("forest") ||
+            id.includes("grass")
           ) {
+            // Parks, Plazas & Greenery: Vivid Cyber Emerald Green
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#150a2b");
+              map.setPaintProperty(layer.id, "fill-color", "#059669");
+              map.setPaintProperty(layer.id, "fill-opacity", 0.85);
+            } catch {}
+          } else if (id.includes("building")) {
+            // Buildings & Urban Blocks: Crisp Dark Slate Navy (neutral high-tech)
+            try {
+              map.setPaintProperty(layer.id, "fill-color", "#131d33");
+              map.setPaintProperty(layer.id, "fill-outline-color", "#233355");
+              map.setPaintProperty(layer.id, "fill-opacity", 0.95);
             } catch {}
           }
         }
 
-        // 3. Neon Arcade Streets & Waterways
+        // 3. High-Contrast Vivid Street Network
         if (layer.type === "line") {
           if (id.includes("water")) {
             try {
-              map.setPaintProperty(layer.id, "line-color", "#163868");
+              map.setPaintProperty(layer.id, "line-color", "#38bdf8");
+              map.setPaintProperty(layer.id, "line-width", 2);
             } catch {}
           } else if (
             id.includes("road") ||
@@ -298,46 +307,53 @@ export function ArcadeMap({
             id.includes("tunnel") ||
             id.includes("rail")
           ) {
-            const isMajor =
+            const isHighSpeed =
               id.includes("motorway") ||
               id.includes("trunk") ||
-              id.includes("primary") ||
-              id.includes("secondary") ||
               id.includes("_mot_") ||
-              id.includes("_trunk_") ||
-              id.includes("_pri_") ||
-              id.includes("_sec_");
+              id.includes("_trunk_");
+            const isPrimary =
+              id.includes("primary") || id.includes("_pri_");
+            const isSecondary =
+              id.includes("secondary") || id.includes("_sec_");
             const isCasing = id.includes("case") || id.includes("casing");
+
+            // Major Avenues: Electric Amber/Yellow (#facc15 / #f97316)
+            // Secondary Arteries: Vivid Neon Orange / Coral (#fb923c)
+            // Residential Streets: Crisp Cyan Neon (#00f0ff)
+            const streetColor = isHighSpeed
+              ? "#f59e0b"
+              : isPrimary
+              ? "#facc15"
+              : isSecondary
+              ? "#fb923c"
+              : "#00f0ff";
 
             try {
               map.setPaintProperty(
                 layer.id,
                 "line-color",
-                isCasing
-                  ? "#080312"
-                  : isMajor
-                  ? secondaryColor
-                  : "#a855f7"
+                isCasing ? "#020617" : streetColor
               );
               map.setPaintProperty(
                 layer.id,
                 "line-opacity",
-                isCasing ? 0.75 : isMajor ? 1.0 : 0.85
+                isCasing ? 0.95 : 1.0
               );
             } catch {}
           } else if (id.includes("boundary")) {
             try {
-              map.setPaintProperty(layer.id, "line-color", "#ff007f");
+              map.setPaintProperty(layer.id, "line-color", "#f43f5e");
             } catch {}
           }
         }
 
-        // 4. Crisp Neon Street Labels
+        // 4. Crisp High-Legibility Street & Place Labels
         if (layer.type === "symbol") {
           try {
             map.setPaintProperty(layer.id, "text-color", "#ffffff");
-            map.setPaintProperty(layer.id, "text-halo-color", "#080312");
-            map.setPaintProperty(layer.id, "text-halo-width", 2);
+            map.setPaintProperty(layer.id, "text-halo-color", "#020617");
+            map.setPaintProperty(layer.id, "text-halo-width", 2.2);
           } catch {}
         }
       }
@@ -489,7 +505,7 @@ export function ArcadeMap({
   return (
     <div
       ref={containerRef}
-      className="arcade-map-wrapper w-full h-full relative overflow-hidden bg-[#1a103c]"
+      className="arcade-map-wrapper w-full h-full relative overflow-hidden bg-[#080d1a]"
     />
   );
 }
