@@ -5,3 +5,7 @@
 - No utilizar emojis en elementos visuales del DOM ni de `<canvas>`.
 - Los emojis solo están permitidos en cadenas de texto plano destinadas a canales externos sin soporte SVG cuando el requerimiento de negocio así lo especifica (ej. generador de copy para portapapeles de WhatsApp/Instagram y payload textual de Web Push).
 
+## Alcance Estricto: Cero Funcionalidades No Solicitadas
+- Queda estrictamente prohibido inventar o agregar botones, modos, opciones o funcionalidades adicionales que el usuario no haya pedido explícitamente.
+- Limitarse única y quirúrgicamente a resolver lo solicitado por el usuario sin añadir características extras por iniciativa propia.
+

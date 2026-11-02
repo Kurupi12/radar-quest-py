@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, Circle, Download, Share2, Square, Video } from "lucide-react";
+import { Circle, Download, Share2, Square, Video } from "lucide-react";
 import fixWebmDuration from "fix-webm-duration";
 import type { Brand, PublicBrand, PublicMission, ThermalState } from "@/types/radar";
 
@@ -209,47 +209,6 @@ export function ViralRecorder({
   };
 
   /**
-   * Instant Story Snapshot (PNG 9:16)
-   */
-  const shareInstantSnapshot = async () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = STORY_WIDTH;
-    canvas.height = STORY_HEIGHT;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    renderCompositeFrame(ctx, 0);
-
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      const filename = `radar-quest-${brand.slug}-${Date.now()}.png`;
-      const file = new File([blob], filename, { type: "image/png" });
-
-      if (
-        typeof navigator !== "undefined" &&
-        navigator.canShare &&
-        navigator.canShare({ files: [file] })
-      ) {
-        try {
-          await navigator.share({
-            title: `¡Caza del tesoro de ${brand.name}!`,
-            text: `Buscando el drop de ${brand.name} en modo ${thermalState} #RadarQuestPY`,
-            files: [file],
-          });
-          return;
-        } catch {}
-      }
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    }, "image/png");
-  };
-
-  /**
    * Start 15-second Video Recording
    */
   const startViralRecording = () => {
@@ -407,28 +366,16 @@ export function ViralRecorder({
   return (
     <div className="flex items-center gap-1.5">
       {!isRecording ? (
-        <>
-          <button
-            type="button"
-            onClick={startViralRecording}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-red-600/95 hover:bg-red-500 border border-red-300 text-white text-[10px] font-bold tracking-wider uppercase shadow-[0_0_12px_rgba(239,68,68,0.6)] active:scale-95 transition cursor-pointer"
-            title="Graba video de 15 segundos para Historias de Instagram/TikTok"
-          >
-            <Circle className="w-3 h-3 fill-white text-white animate-pulse" />
-            <Video className="w-3.5 h-3.5" />
-            <span>VIDEO 15S</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={shareInstantSnapshot}
-            className="flex items-center gap-1 px-2 py-1.5 rounded bg-purple-900/90 hover:bg-purple-800 border border-purple-400/60 text-purple-200 text-[10px] font-bold uppercase cursor-pointer"
-            title="Compartir foto Story 9:16 al instante"
-          >
-            <Camera className="w-3.5 h-3.5 text-cyan-300" />
-            <span>STORY FOTO</span>
-          </button>
-        </>
+        <button
+          type="button"
+          onClick={startViralRecording}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-red-600/95 hover:bg-red-500 border border-red-300 text-white text-[10px] font-bold tracking-wider uppercase shadow-[0_0_12px_rgba(239,68,68,0.6)] active:scale-95 transition cursor-pointer"
+          title="Graba video de 15 segundos para Historias de Instagram/TikTok"
+        >
+          <Circle className="w-3 h-3 fill-white text-white animate-pulse" />
+          <Video className="w-3.5 h-3.5" />
+          <span>GRABAR PARA REDES</span>
+        </button>
       ) : (
         <button
           type="button"
