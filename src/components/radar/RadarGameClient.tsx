@@ -548,7 +548,7 @@ export function RadarGameClient({
                 </div>
                 <div className="truncate">
                   <div className="flex items-center gap-1.5">
-                    <h1 className="font-extrabold text-xs uppercase tracking-wider text-white truncate">
+                    <h1 className="font-handjet font-black text-base uppercase tracking-wider text-white truncate">
                       {brand.name}
                     </h1>
                     {brand.requireAdult18 && (
@@ -635,7 +635,7 @@ export function RadarGameClient({
                 <select
                   value={selectedMissionId}
                   onChange={(e) => setSelectedMissionId(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded bg-[#140b29]/95 border border-purple-500/60 text-white text-xs font-semibold focus:outline-none"
+                  className="w-full px-2.5 py-1.5 rounded bg-[#140b29]/95 border border-purple-500/60 text-white font-handjet text-sm font-bold tracking-wide focus:outline-none"
                 >
                   {missions.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -656,7 +656,7 @@ export function RadarGameClient({
               }}
             >
               <ThermalStatusIcon state={currentThermal} />
-              <p className="font-pixel text-[9px] leading-relaxed">
+              <p className="font-handjet font-bold text-sm tracking-wider leading-relaxed">
                 {thermalStyle.label}
               </p>
             </div>
@@ -689,7 +689,7 @@ export function RadarGameClient({
             {selectedMission && (
               <div className="p-2.5 rounded-lg bg-[#140b29]/95 border border-purple-500/40 space-y-1.5">
                 <div className="flex items-center justify-between gap-2 text-[10px]">
-                  <span className="font-bold uppercase text-amber-300 truncate flex items-center gap-1.5">
+                  <span className="font-handjet text-sm font-bold uppercase text-amber-300 tracking-wide truncate flex items-center gap-1.5">
                     <Gift className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">
                       {selectedMission.prizeTitle}

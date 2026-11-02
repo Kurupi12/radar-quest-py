@@ -1,7 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Press_Start_2P, Space_Grotesk, VT323 } from "next/font/google";
+import { Handjet, Press_Start_2P, Space_Grotesk, VT323 } from "next/font/google";
 import { PwaRegistrar } from "@/components/PwaRegistrar";
 import "./globals.css";
+
+const handjet = Handjet({
+  subsets: ["latin"],
+  variable: "--font-handjet",
+  display: "swap",
+});
 
 const pressStart = Press_Start_2P({
   weight: "400",
@@ -50,7 +56,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${pressStart.variable} ${vt323.variable} ${spaceGrotesk.variable}`}
+      className={`${pressStart.variable} ${vt323.variable} ${spaceGrotesk.variable} ${handjet.variable}`}
     >
       <body className="antialiased selection:bg-purple-500 selection:text-white font-[family-name:var(--font-space)]">
         <PwaRegistrar />

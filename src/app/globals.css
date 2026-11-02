@@ -23,9 +23,23 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+.font-handjet {
+  font-family: var(--font-handjet), sans-serif;
+  letter-spacing: 0.05em;
+}
+
+.font-title,
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-handjet), sans-serif;
+  letter-spacing: 0.05em;
+}
+
 .font-pixel {
-  font-family: var(--font-press-start), monospace;
-  letter-spacing: 0.03em;
+  font-family: var(--font-handjet), var(--font-press-start), monospace;
+  letter-spacing: 0.05em;
 }
 
 .font-retro {
