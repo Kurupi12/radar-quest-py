@@ -4,9 +4,15 @@ import { useEffect, useRef } from "react";
 import {
   Map as MapLibreMap,
   Marker,
+  setWorkerUrl,
   type GeoJSONSource,
   type MapMouseEvent,
 } from "maplibre-gl";
+
+// Fix for Next.js / Turbopack Worker loading
+if (typeof window !== "undefined") {
+  setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
+}
 
 export interface LiveHunterPin {
   hunterId: string;
@@ -251,22 +257,22 @@ export function ArcadeMap({
           continue;
         }
 
-        // 2. Background & Urban Blocks (#2d1b4e)
+        // 2. Background & Urban Blocks
         if (layer.type === "background") {
           try {
-            map.setPaintProperty(layer.id, "background-color", "#2d1b4e");
+            map.setPaintProperty(layer.id, "background-color", "#0e0622");
           } catch {}
         }
 
         if (layer.type === "fill") {
           if (id.includes("water")) {
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#1a103c");
+              map.setPaintProperty(layer.id, "fill-color", "#0b193d");
             } catch {}
           } else if (id.includes("building")) {
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#392263");
-              map.setPaintProperty(layer.id, "fill-outline-color", primaryColor);
+              map.setPaintProperty(layer.id, "fill-color", "#25123d");
+              map.setPaintProperty(layer.id, "fill-outline-color", "#581c87");
             } catch {}
           } else if (
             id.includes("park") ||
@@ -274,7 +280,7 @@ export function ArcadeMap({
             id.includes("landcover")
           ) {
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#251542");
+              map.setPaintProperty(layer.id, "fill-color", "#150a2b");
             } catch {}
           }
         }
@@ -283,19 +289,24 @@ export function ArcadeMap({
         if (layer.type === "line") {
           if (id.includes("water")) {
             try {
-              map.setPaintProperty(layer.id, "line-color", "#1a103c");
+              map.setPaintProperty(layer.id, "line-color", "#163868");
             } catch {}
           } else if (
             id.includes("road") ||
             id.includes("transportation") ||
             id.includes("bridge") ||
-            id.includes("tunnel")
+            id.includes("tunnel") ||
+            id.includes("rail")
           ) {
             const isMajor =
               id.includes("motorway") ||
               id.includes("trunk") ||
               id.includes("primary") ||
-              id.includes("secondary");
+              id.includes("secondary") ||
+              id.includes("_mot_") ||
+              id.includes("_trunk_") ||
+              id.includes("_pri_") ||
+              id.includes("_sec_");
             const isCasing = id.includes("case") || id.includes("casing");
 
             try {
@@ -303,15 +314,15 @@ export function ArcadeMap({
                 layer.id,
                 "line-color",
                 isCasing
-                  ? "#120824"
+                  ? "#080312"
                   : isMajor
                   ? secondaryColor
-                  : primaryColor
+                  : "#a855f7"
               );
               map.setPaintProperty(
                 layer.id,
                 "line-opacity",
-                isCasing ? 0.85 : isMajor ? 0.92 : 0.65
+                isCasing ? 0.75 : isMajor ? 1.0 : 0.85
               );
             } catch {}
           } else if (id.includes("boundary")) {
@@ -324,8 +335,8 @@ export function ArcadeMap({
         // 4. Crisp Neon Street Labels
         if (layer.type === "symbol") {
           try {
-            map.setPaintProperty(layer.id, "text-color", "#f8fafc");
-            map.setPaintProperty(layer.id, "text-halo-color", "#120824");
+            map.setPaintProperty(layer.id, "text-color", "#ffffff");
+            map.setPaintProperty(layer.id, "text-halo-color", "#080312");
             map.setPaintProperty(layer.id, "text-halo-width", 2);
           } catch {}
         }
@@ -351,6 +362,7 @@ export function ArcadeMap({
     };
 
     map.on("style.load", applyArcade16BitPalette);
+    map.on("load", applyArcade16BitPalette);
 
     if (mode === "admin-pin") {
       map.on("click", (ev: MapMouseEvent) => {
