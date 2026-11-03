@@ -6,11 +6,20 @@ import type { ThermalState } from "@/types/radar";
 // RADAR QUEST - 8-Bit Chiptune Web Audio Synth, Adaptive BGM, Haptics & WakeLock
 // ============================================================================
 
-type BgmTrackKey = "exploration" | "tension";
+type BgmTrackKey = "exploration" | "tension" | "climax";
+
+const BGM_TRACK_KEYS: BgmTrackKey[] = ["exploration", "tension", "climax"];
 
 const BGM_TRACK_SOURCES: Record<BgmTrackKey, string> = {
   exploration: "/audio/bgm.mp3",
   tension: "/audio/bgm_tension.mp3",
+  climax: "/audio/bgm_climax.mp3",
+};
+
+const BGM_DEFAULT_VOLUMES: Record<BgmTrackKey, number> = {
+  exploration: 0.35,
+  tension: 0.38,
+  climax: 0.45,
 };
 
 class ArcadeHardwareController {
@@ -30,12 +39,12 @@ class ArcadeHardwareController {
     volume: number;
   } {
     switch (state) {
-      case "TIBIO":
-        return { track: "tension", volume: 0.38 };
+      case "QUEMANDO":
+        return { track: "climax", volume: 0.45 };
       case "CALIENTE":
         return { track: "tension", volume: 0.42 };
-      case "QUEMANDO":
-        return { track: "tension", volume: 0.44 };
+      case "TIBIO":
+        return { track: "tension", volume: 0.38 };
       case "FUERA DE ZONA":
       case "CONGELADO":
       case "TELEPORT_ANOMALY":
@@ -61,7 +70,7 @@ class ArcadeHardwareController {
       audio.src = BGM_TRACK_SOURCES[key];
       audio.preload = "auto";
       audio.loop = true;
-      this.safeSetVolume(audio, key === "exploration" ? 0.35 : 0.38);
+      this.safeSetVolume(audio, BGM_DEFAULT_VOLUMES[key]);
       this.bgmTracks[key] = audio;
     }
     return this.bgmTracks[key]!;
@@ -79,8 +88,7 @@ class ArcadeHardwareController {
    * browsers (iOS Safari / Android Chrome) allow async GPS-triggered transitions.
    */
   private unlockInactiveTracksFromGesture(excludeKey: BgmTrackKey) {
-    const keys: BgmTrackKey[] = ["exploration", "tension"];
-    for (const key of keys) {
+    for (const key of BGM_TRACK_KEYS) {
       if (key === excludeKey || this.unlockedTracks.has(key)) continue;
       const audio = this.getOrCreateTrack(key);
       if (!audio) continue;
@@ -106,10 +114,9 @@ class ArcadeHardwareController {
 
   public preloadBgm(_src = "/audio/bgm.mp3", _volume = 0.35) {
     if (typeof window === "undefined") return;
-    const exploration = this.getOrCreateTrack("exploration");
-    const tension = this.getOrCreateTrack("tension");
-    exploration?.load();
-    tension?.load();
+    for (const key of BGM_TRACK_KEYS) {
+      this.getOrCreateTrack(key)?.load();
+    }
   }
 
   public initAudioContext(): AudioContext | null {
@@ -140,12 +147,13 @@ class ArcadeHardwareController {
 
     this.clearCrossfade();
     const targetKey = this.desiredTrack;
-    const otherKey: BgmTrackKey =
-      targetKey === "exploration" ? "tension" : "exploration";
 
-    const otherAudio = this.bgmTracks[otherKey];
-    if (otherAudio && !otherAudio.paused) {
-      otherAudio.pause();
+    for (const key of BGM_TRACK_KEYS) {
+      if (key === targetKey) continue;
+      const otherAudio = this.bgmTracks[key];
+      if (otherAudio && !otherAudio.paused) {
+        otherAudio.pause();
+      }
     }
 
     this.unlockInactiveTracksFromGesture(targetKey);
@@ -167,8 +175,10 @@ class ArcadeHardwareController {
   }
 
   /**
-   * Dynamically crossfades between Exploration BGM (FUERA DE ZONA / CONGELADO)
-   * and Dark Synthwave Tension BGM (TIBIO / CALIENTE / QUEMANDO).
+   * Dynamically crossfades across 3 adaptive BGM stems:
+   * - Exploration (/audio/bgm.mp3, 100 BPM): FUERA DE ZONA / CONGELADO
+   * - Tension (/audio/bgm_tension.mp3, 110 BPM): TIBIO / CALIENTE
+   * - Climax (/audio/bgm_climax.mp3, 120 BPM): ¡QUEMANDO! (<30m on foot)
    */
   public syncBgmWithThermalState(state: ThermalState) {
     if (typeof window === "undefined") return;
@@ -196,11 +206,30 @@ class ArcadeHardwareController {
     const prevTrack = this.activeTrack;
     this.activeTrack = nextTrack;
 
+    // Ensure any third track from an interrupted earlier fade is paused cleanly
+    for (const key of BGM_TRACK_KEYS) {
+      if (key !== prevTrack && key !== nextTrack) {
+        const extra = this.bgmTracks[key];
+        if (extra && !extra.paused) {
+          extra.pause();
+        }
+      }
+    }
+
     const outgoing = this.getOrCreateTrack(prevTrack);
     const incoming = this.getOrCreateTrack(nextTrack);
     if (!incoming) return;
 
     incoming.muted = false;
+    // Start Climax from beat 1 so the triumphant 120 BPM synth brass hits right at <30m
+    if (nextTrack === "climax") {
+      try {
+        incoming.currentTime = 0;
+      } catch {
+        // Ignore if metadata not yet seekable
+      }
+    }
+
     const canFade = this.safeSetVolume(incoming, 0.01);
 
     if (!canFade || !outgoing || outgoing.paused) {
@@ -212,11 +241,11 @@ class ArcadeHardwareController {
       return;
     }
 
-    const startOutVol = outgoing.volume || 0.35;
+    const startOutVol = outgoing.volume || BGM_DEFAULT_VOLUMES[prevTrack];
     incoming.play().catch(() => {});
 
     let step = 0;
-    const totalSteps = 18;
+    const totalSteps = nextTrack === "climax" ? 12 : 18;
     this.crossfadeTimer = window.setInterval(() => {
       if (this.muted || !this.bgmStarted) {
         this.clearCrossfade();
@@ -233,7 +262,7 @@ class ArcadeHardwareController {
       if (step >= totalSteps) {
         this.clearCrossfade();
         outgoing.pause();
-        this.safeSetVolume(outgoing, prevTrack === "exploration" ? 0.35 : 0.38);
+        this.safeSetVolume(outgoing, BGM_DEFAULT_VOLUMES[prevTrack]);
         this.safeSetVolume(incoming, this.desiredVolume);
       }
     }, 45);
@@ -241,8 +270,7 @@ class ArcadeHardwareController {
 
   public pauseBgm() {
     this.clearCrossfade();
-    const keys: BgmTrackKey[] = ["exploration", "tension"];
-    for (const key of keys) {
+    for (const key of BGM_TRACK_KEYS) {
       const audio = this.bgmTracks[key];
       if (audio && !audio.paused) {
         audio.pause();

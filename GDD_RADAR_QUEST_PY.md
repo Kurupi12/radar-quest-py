@@ -26,7 +26,7 @@ En lugar de mostrar un marcador de destino tradicional, el jugador navega el ent
 | **Core Runtime** | Next.js 16.4 (Turbopack), React 19.3, TypeScript | Orquestación cliente-servidor, rutas dinámicas multi-marca (`/b/[brand]`) y APIs de baja latencia. |
 | **Motor Cartográfico** | MapLibre GL JS 6.16 + Web Workers dedicados | Renderizado vectorial WebGL reprogramado en caliente con paleta cyberpunk de alto contraste y cámara inclinada (`pitch: 22°`). |
 | **Motor Gráfico 2D / VFX** | HTML5 `<canvas>` (`360x640` lógico, `pixelated`) | Loop independiente a **60 FPS** (`requestAnimationFrame`) para spritesheets, ondas Bresenham, fuego, congelamiento estocástico y partículas. |
-| **Audio & Síntesis** | Web Audio API + Dual-Stem Adaptive BGM | Sintetizador chiptune procedimental (`square`, `triangle`, `sawtooth`) + crossfade dinámico de BGM Synthwave (`100 BPM` exploración / `110 BPM` tensión). |
+| **Audio & Síntesis** | Web Audio API + Tri-Stem Adaptive BGM | Sintetizador chiptune procedimental (`square`, `triangle`, `sawtooth`) + crossfade dinámico de 3 capas Synthwave (`100` / `110` / `120 BPM`). |
 | ** Sensores Físicos** | Geolocation API, Screen Wake Lock, Vibration API | Rastreo Haversine de alta precisión, pantalla siempre activa en caminata y feedback háptico rítmico. |
 | **Visión Artificial (QR)** | WebRTC + Native `BarcodeDetector` + `jsQR` | Escáner óptico en tiempo real acelerado por GPU nativa con fallback automático en CPU. |
 | **Motor de Replay Social** | Canvas Compositor (`540x960`) + `MediaRecorder` | Grabación en vivo de partidas en formato vertical `9:16` (MP4/WebM) con HUD retrofuturista incrustado para redes sociales. |
@@ -65,7 +65,7 @@ El servidor evalúa la distancia geodésica exacta mediante la fórmula de **Hav
 | **`CONGELADO`** | `650 m` a `3.500 m` | `24%` | En zona urbana activa pero lejos del objetivo. Anillos celestes lentos y activación del sistema estocástico de escarcha. |
 | **`TIBIO`** | `160 m` a `650 m` | `52%` | Acercamiento confirmado en el barrio correcto. Anillos amarillos, desaparece el frío y la música conmuta con crossfade al tema de tensión (`110 BPM`). |
 | **`CALIENTE`** | `30 m` a `160 m` *(o `< 30 m` en vehículo)* | `78%` | Proximidad alta. Se enciende el aura de llamas pixel-art, sube la ganancia del bajo modular de tensión y, si va a `>= 20 km/h`, bloquea el avance aquí. |
-| **`QUEMANDO`** | **`< 30 m` y velocidad `< 20 km/h` (a pie)** | `98%` | Zona de captura alcanzada. El personaje salta celebrando entre llamas intensas y **se desbloquea el botón de captura**. |
+| **`QUEMANDO`** | **`< 30 m` y velocidad `< 20 km/h` (a pie)** | `98%` | Zona de captura alcanzada. Estalla el tema Synthwave Clímax (`120 BPM`), el personaje salta entre llamas y **se desbloquea la captura**. |
 | **`TELEPORT_ANOMALY`** | Salto `> 500 m` en `<= 45 s` o `> 130 km/h` | `0%` | Penalización Anti-Spoofing activa. Bloquea el progreso de caza y cualquier intento de reclamo. |
 
 ### 3.3. Asistencia Táctica de Trayectoria (`TacticalVectorAssistance`)
@@ -206,13 +206,14 @@ El protagonista es un **Cazador Urbano Cyberpunk de 16 bits** (`48x48 px` base, 
 
 ### 7.1. Sincronización de Arranque y Música Synthwave Adaptativa (BGM)
 
-Los navegadores modernos bloquean cualquier reproducción de audio automática previa a una interacción humana (*Autoplay Policy*). Radar Quest convierte esta restricción técnica en parte de la fantasía arcade mediante **`RadarPreloader`** y un motor musical dinámico de dos capas en `ArcadeHardwareController`:
+Los navegadores modernos bloquean cualquier reproducción de audio automática previa a una interacción humana (*Autoplay Policy*). Radar Quest convierte esta restricción técnica en parte de la fantasía arcade mediante **`RadarPreloader`** y un motor musical dinámico de **tres capas horizontales** en `ArcadeHardwareController`:
 
-1. **Precarga Dual en Paralelo:** El documento raíz inyecta `<link rel="preload" as="audio">` tanto para `/audio/bgm.mp3` como para `/audio/bgm_tension.mp3` mientras el preloader llena la barra segmentada de 16 bloques.
-2. **Desbloqueo Táctil Silencioso para Transiciones Manos Libres:** Al presionar **`[ INICIAR RADAR ]`**, el gesto del jugador inicializa el `AudioContext`, arranca la pista activa en el milisegundo cero y desbloquea en silencio la pista secundaria para que los navegadores móviles (iOS Safari y Android Chrome) permitan cambiar de canción automáticamente por GPS mientras el jugador camina sin tocar la pantalla.
+1. **Precarga Triple en Paralelo:** El documento raíz inyecta `<link rel="preload" as="audio">` para `/audio/bgm.mp3`, `/audio/bgm_tension.mp3` y `/audio/bgm_climax.mp3` mientras el preloader llena la barra segmentada de 16 bloques.
+2. **Desbloqueo Táctil Silencioso para Transiciones Manos Libres:** Al presionar **`[ INICIAR RADAR ]`**, el gesto del jugador inicializa el `AudioContext`, arranca la pista activa en el milisegundo cero y desbloquea en silencio las pistas inactivas para que los navegadores móviles (iOS Safari y Android Chrome) permitan conmutar canciones automáticamente por GPS mientras el jugador camina sin tocar la pantalla.
 3. **Re-Secuenciación Horizontal con Crossfade (`syncBgmWithThermalState`):**
-   * **Capa de Exploración (`/audio/bgm.mp3` — `100 BPM`, ganancia `0.35`):** Synthwave analógico nostálgico con sintetizadores cálidos y percusión 808 suave durante los estados lejanos (`FUERA DE ZONA` y `CONGELADO`).
-   * **Capa de Tensión Táctica (`/audio/bgm_tension.mp3` — `110 BPM`, ganancia `0.38` a `0.44`):** *Dark Synthwave* con línea de bajo modular pulsante y percusión rítmica de reloj (*retrofuturistic thriller*). Al cruzar al umbral **`TIBIO`** o **`CALIENTE`** (y sosteniendo la adrenalina en `QUEMANDO`), el motor ejecuta un **crossfade progresivo de `~810 ms`** entre ambas pistas, regresando suavemente al tema de exploración si el cazador vuelve a alejarse.
+   * **Capa 1 — Exploración (`/audio/bgm.mp3` — `100 BPM`, ganancia `0.35`):** Synthwave analógico nostálgico con sintetizadores cálidos y percusión 808 suave durante los estados lejanos (`FUERA DE ZONA` y `CONGELADO`).
+   * **Capa 2 — Tensión Táctica (`/audio/bgm_tension.mp3` — `110 BPM`, ganancia `0.38` a `0.42`):** *Dark Synthwave* con línea de bajo modular pulsante y percusión rítmica de reloj al ingresar a **`TIBIO`** o **`CALIENTE`**, mediante un crossfade progresivo de `~810 ms`.
+   * **Capa 3 — Clímax de Cacería (`/audio/bgm_climax.mp3` — `120 BPM`, ganancia `0.45`):** *Upbeat 80s Arcade Synthwave* triunfal con metales sintéticos y bajo rápido pulsante al pisar el radio de **`¡QUEMANDO!`** (`< 30 m` a pie), disparando desde el compás inicial con un crossfade rápido de impacto (`~540 ms`) sincronizado con el salto de celebración y las llamas del personaje.
 
 ### 7.2. Sintetizador Chiptune Procedimental (`ArcadeHardwareController`)
 
