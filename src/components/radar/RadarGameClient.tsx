@@ -502,7 +502,24 @@ export function RadarGameClient({
     const next = !muted;
     setMuted(next);
     arcadeHardware.setMuted(next);
+    if (!next) {
+      arcadeHardware.playBgm();
+    }
   };
+
+  // Reproducir BGM en la primera interacción táctil si el audio está activo
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const startAudioOnInteraction = () => {
+      if (!arcadeHardware.isMuted()) {
+        arcadeHardware.playBgm();
+      }
+    };
+    window.addEventListener("pointerdown", startAudioOnInteraction, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", startAudioOnInteraction);
+    };
+  }, []);
 
   const currentThermal: ThermalState =
     pingData?.thermalState || "FUERA DE ZONA";

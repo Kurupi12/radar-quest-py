@@ -59,6 +59,7 @@ export function OnboardingModal({
       } catch {}
 
       arcadeHardware.playPowerUpOnboarding();
+      arcadeHardware.playBgm();
       arcadeHardware.requestWakeLock();
       onComplete(data.hunter, data.sessionToken);
     } catch {

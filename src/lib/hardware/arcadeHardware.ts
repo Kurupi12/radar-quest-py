@@ -10,6 +10,7 @@ class ArcadeHardwareController {
   private audioCtx: AudioContext | null = null;
   private wakeLockSentinel: WakeLockSentinel | null = null;
   private muted = false;
+  private bgmAudio: HTMLAudioElement | null = null;
 
   private ensureAudio(): AudioContext | null {
     if (typeof window === "undefined" || this.muted) return null;
@@ -28,8 +29,32 @@ class ArcadeHardwareController {
     return this.audioCtx;
   }
 
+  public playBgm(src = "/audio/bgm.mp3", volume = 0.35) {
+    if (typeof window === "undefined") return;
+    if (!this.bgmAudio) {
+      this.bgmAudio = new Audio(src);
+      this.bgmAudio.loop = true;
+      this.bgmAudio.volume = volume;
+    }
+    if (this.muted) return;
+    this.bgmAudio.play().catch(() => {
+      // El navegador puede requerir interacción previa del usuario
+    });
+  }
+
+  public pauseBgm() {
+    if (this.bgmAudio) {
+      this.bgmAudio.pause();
+    }
+  }
+
   public setMuted(mute: boolean) {
     this.muted = mute;
+    if (mute) {
+      this.pauseBgm();
+    } else {
+      this.playBgm();
+    }
   }
 
   public isMuted(): boolean {
