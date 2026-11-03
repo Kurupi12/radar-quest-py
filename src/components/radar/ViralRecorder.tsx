@@ -369,21 +369,21 @@ export function ViralRecorder({
         <button
           type="button"
           onClick={startViralRecording}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-red-600/95 hover:bg-red-500 border border-red-300 text-white text-[10px] font-bold tracking-wider uppercase shadow-[0_0_12px_rgba(239,68,68,0.6)] active:scale-95 transition cursor-pointer"
+          className="px-3.5 py-2 rf-btn-crimson text-xs leading-none"
           title="Graba video de 15 segundos para Historias de Instagram/TikTok"
         >
-          <Circle className="w-3 h-3 fill-white text-white animate-pulse" />
-          <Video className="w-3.5 h-3.5" />
           <span>GRABAR PARA REDES</span>
         </button>
       ) : (
         <button
           type="button"
           onClick={stopViralRecording}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-red-500 border-2 border-yellow-300 text-white text-[10px] font-bold uppercase animate-pulse cursor-pointer shadow-[0_0_15px_rgba(239,68,68,0.8)]"
+          className="px-3.5 py-2 rf-btn-crimson text-xs leading-none animate-pulse"
         >
-          <Square className="w-3 h-3 fill-white" />
-          <span>REC 00:{String(secondsElapsed).padStart(2, "0")}/{INSTAGRAM_STORY_SECONDS}s (PARAR)</span>
+          <span>
+            REC 00:{String(secondsElapsed).padStart(2, "0")}/
+            {INSTAGRAM_STORY_SECONDS}S
+          </span>
         </button>
       )}
 
@@ -391,11 +391,9 @@ export function ViralRecorder({
         <button
           type="button"
           onClick={shareOrDownloadClip}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded bg-emerald-500 hover:bg-emerald-400 border border-emerald-200 text-slate-950 text-[10px] font-extrabold uppercase shadow-lg animate-bounce cursor-pointer"
+          className="px-3 py-2 rf-btn-emerald text-xs leading-none"
         >
-          <Share2 className="w-3.5 h-3.5" />
           <span>COMPARTIR 15S</span>
-          <Download className="w-3 h-3 opacity-75" />
         </button>
       )}
     </div>

@@ -929,9 +929,8 @@ export function RadarGameClient({
                       type="button"
                       onClick={handlePresentialClaim}
                       disabled={presentialClaiming}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rf-btn-emerald text-xs"
+                      className="px-3.5 py-2 rf-btn-emerald text-xs leading-none"
                     >
-                      <MapPin className="w-4 h-4" />
                       <span>
                         {presentialClaiming
                           ? "REGISTRANDO..."
@@ -943,10 +942,9 @@ export function RadarGameClient({
                       <button
                         type="button"
                         disabled
-                        className="flex items-center gap-1 px-2.5 py-2 rf-btn-steel text-[10px] opacity-60 cursor-not-allowed select-none"
+                        className="px-3 py-2 rf-btn-steel text-[10px] leading-none opacity-60 cursor-not-allowed select-none"
                         title="Se habilita al llegar al punto secreto (<30m a pie)"
                       >
-                        <Lock className="w-3.5 h-3.5" />
                         <span>LLEGAR AL PUNTO (&lt;30M)</span>
                       </button>
                     )
@@ -958,19 +956,17 @@ export function RadarGameClient({
                     <button
                       type="button"
                       onClick={() => setShowInAppScanner(true)}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rf-btn-gold text-xs"
+                      className="px-3.5 py-2 rf-btn-gold text-xs leading-none"
                     >
-                      <Camera className="w-4 h-4" />
                       <span>ESCANEAR QR</span>
                     </button>
                   ) : (
                     <button
                       type="button"
                       disabled
-                      className="flex items-center gap-1 px-2.5 py-2 rf-btn-steel text-[10px] opacity-60 cursor-not-allowed select-none"
+                      className="px-3 py-2 rf-btn-steel text-[10px] leading-none opacity-60 cursor-not-allowed select-none"
                       title="Se habilita únicamente en estado ¡QUEMANDO! (<30m y a pie <20 km/h)"
                     >
-                      <Lock className="w-3.5 h-3.5" />
                       <span>ESCANEAR (&lt;30M)</span>
                     </button>
                   ))}
