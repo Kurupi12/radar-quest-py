@@ -67,57 +67,64 @@ function getThermalBadgeStyle(
   bg: string;
   border: string;
   text: string;
-  label: string;
+  title: string;
+  subtitle: string;
 } {
   switch (state) {
     case "QUEMANDO":
-      let quemandoLabel = "¡QUEMANDO! (<30M) ¡RECLAMÁ TU PREMIO!";
+      let quemandoSub = "(<30M) • ¡RECLAMÁ TU PREMIO!";
       if (validationMode === "PRESENTIAL_GPS") {
-        quemandoLabel = "¡QUEMANDO! (<30M) ¡ENCONTRÁ AL EQUIPO!";
+        quemandoSub = "(<30M) • ¡ENCONTRÁ AL EQUIPO!";
       } else if (validationMode === "QR_SCAN") {
-        quemandoLabel = "¡QUEMANDO! (<30M) ¡ESCANEÁ EL QR!";
+        quemandoSub = "(<30M) • ¡ESCANEÁ EL QR!";
       }
       return {
-        bg: "rgba(220, 38, 38, 0.92)",
+        bg: "rgba(220, 38, 38, 0.95)",
         border: "#fde047",
         text: "#fef08a",
-        label: quemandoLabel,
+        title: "¡QUEMANDO!",
+        subtitle: quemandoSub,
       };
     case "CALIENTE":
       return {
-        bg: "rgba(234, 88, 12, 0.9)",
+        bg: "rgba(234, 88, 12, 0.92)",
         border: "#fb923c",
         text: "#ffedd5",
-        label: "CALIENTE • MUY CERCA",
+        title: "CALIENTE",
+        subtitle: "MUY CERCA DEL PUNTO",
       };
     case "TIBIO":
       return {
-        bg: "rgba(161, 98, 7, 0.88)",
+        bg: "rgba(161, 98, 7, 0.9)",
         border: "#facc15",
         text: "#fef9c3",
-        label: "TIBIO • EN ZONA DE RASTREO",
+        title: "TIBIO",
+        subtitle: "EN ZONA DE RASTREO",
       };
     case "CONGELADO":
       return {
-        bg: "rgba(3, 105, 161, 0.88)",
+        bg: "rgba(3, 105, 161, 0.9)",
         border: "#38bdf8",
         text: "#e0f2fe",
-        label: "CONGELADO • LEJOS DEL PUNTO",
+        title: "CONGELADO",
+        subtitle: "LEJOS DEL PUNTO",
       };
     case "TELEPORT_ANOMALY":
       return {
         bg: "rgba(127, 29, 29, 0.95)",
         border: "#ef4444",
         text: "#fecaca",
-        label: "TELEPORT_ANOMALY DETECTADO",
+        title: "TELEPORT ANOMALY",
+        subtitle: "ANTI-SPOOFING ACTIVO",
       };
     case "FUERA DE ZONA":
     default:
       return {
-        bg: "rgba(30, 17, 58, 0.9)",
+        bg: "rgba(30, 17, 58, 0.92)",
         border: "#a855f7",
         text: "#e9d5ff",
-        label: "FUERA DE ZONA • ACERCATE A LA CIUDAD",
+        title: "FUERA DE ZONA",
+        subtitle: "ACERCATE A LA CIUDAD",
       };
   }
 }
@@ -633,15 +640,19 @@ export function RadarGameClient({
 
           <div className="crt-scanlines pointer-events-none absolute inset-0 z-10 opacity-45" />
 
-          {/* TOP HUD */}
-          <header className="absolute top-0 inset-x-0 z-20 p-2.5 space-y-2 bg-gradient-to-b from-[#0c051c]/95 via-[#0c051c]/75 to-transparent">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
+          {/* TOP HUD (Retrofuturistic Cockpit Chassis) */}
+          <header className="absolute top-0 inset-x-0 z-20 p-2 space-y-1.5">
+            <div className="rf-panel rf-panel-cyan p-2 relative overflow-hidden flex items-center justify-between gap-2 shadow-2xl">
+              {/* Top-Right Hazard Warning Caution Accent */}
+              <div className="absolute top-0 right-0 w-20 h-2 rf-hazard-stripes-cyan border-b border-l border-cyan-500/50" />
+
+              {/* Left: Brand Identity & Hunter Alias */}
+              <div className="flex items-center gap-2 min-w-0 pr-1">
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 text-cyan-300"
+                  className="w-8 h-8 rounded border-2 flex items-center justify-center shrink-0 text-cyan-300 shadow-inner"
                   style={{
                     borderColor: brand.primaryColor,
-                    backgroundColor: `${brand.primaryColor}25`,
+                    backgroundColor: `${brand.primaryColor}22`,
                   }}
                 >
                   <BrandIconSvg
@@ -655,12 +666,12 @@ export function RadarGameClient({
                       {brand.name}
                     </h1>
                     {brand.requireAdult18 && (
-                      <span className="px-1.5 py-0.5 text-[9px] font-extrabold rounded bg-amber-400 text-slate-950">
+                      <span className="px-1.5 py-0.2 text-[9px] font-black rounded bg-amber-400 text-slate-950 border border-amber-600">
                         +18
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-cyan-300 truncate flex items-center gap-1">
+                  <p className="text-[10px] text-cyan-300 truncate flex items-center gap-1 font-mono">
                     {hunter ? (
                       <>
                         <span>{hunter.alias}</span>
@@ -668,20 +679,19 @@ export function RadarGameClient({
                         {wakeLockActive && (
                           <Sun className="w-2.5 h-2.5 text-amber-300 shrink-0" />
                         )}
-                        <span>
-                          {wakeLockActive ? "WakeLock ON" : "GPS Activo"}
-                        </span>
+                        <span>{wakeLockActive ? "WakeLock" : "GPS"}</span>
                       </>
                     ) : (
-                      <span>Radar Quest Paraguay</span>
+                      <span>Radar Quest PY</span>
                     )}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 shrink-0">
-                <div className="flex items-center gap-1 px-2 py-1 rounded bg-purple-950/90 border border-purple-500/50 text-[10px] font-bold text-cyan-300">
-                  <Users className="w-3 h-3" />
+              {/* Right: Retrofuturistic Micro-Buttons */}
+              <div className="flex items-center gap-1.5 shrink-0 z-10">
+                <div className="px-2 py-1 rf-nameplate text-[10px] text-cyan-300 font-bold border-cyan-500/50 flex items-center gap-1">
+                  <Users className="w-3 h-3 text-cyan-400" />
                   <span>{pingData?.activeHuntersCount ?? 1}</span>
                 </div>
 
@@ -689,19 +699,15 @@ export function RadarGameClient({
                   type="button"
                   onClick={handleSubscribeDropsPush}
                   disabled={pushLoading}
-                  className={`p-1.5 rounded border cursor-pointer transition ${
+                  className={`p-1.5 rf-btn-steel text-xs ${
                     pushSubscribed
-                      ? "bg-emerald-950/90 border-emerald-400/60 text-emerald-300"
-                      : "bg-slate-900/90 border-slate-700 text-amber-300 hover:border-amber-400"
+                      ? "border-emerald-400 text-emerald-300"
+                      : "text-amber-300"
                   }`}
-                  title={
-                    pushSubscribed
-                      ? `Alertas Push activas en ${selectedMission?.city || brand.cityDefault}`
-                      : "Activar notificaciones Web Push para nuevos Drops en tu ciudad"
-                  }
+                  title="Alertas Push de Drops"
                 >
                   {pushSubscribed ? (
-                    <BellRing className="w-3.5 h-3.5" />
+                    <BellRing className="w-3.5 h-3.5 text-emerald-400" />
                   ) : (
                     <Bell className="w-3.5 h-3.5" />
                   )}
@@ -710,7 +716,7 @@ export function RadarGameClient({
                 <button
                   type="button"
                   onClick={toggleAudio}
-                  className="p-1.5 rounded bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-white cursor-pointer"
+                  className="p-1.5 rf-btn-steel text-xs"
                   title="Audio Chiptune 8-Bit"
                 >
                   {muted ? (
@@ -729,32 +735,29 @@ export function RadarGameClient({
               </div>
             )}
 
-            {missions.length > 0 && (
-              <div className="rf-input-slot rf-input-slot-cyan px-2.5 py-1">
-                <MapPin
-                  className="w-3.5 h-3.5 shrink-0 text-cyan-400 mr-1.5"
-                />
-                <select
-                  value={selectedMissionId}
-                  onChange={(e) => setSelectedMissionId(e.target.value)}
-                  className="w-full bg-transparent text-white font-handjet text-sm font-bold tracking-wide focus:outline-none cursor-pointer"
-                >
-                  {missions.map((m) => (
-                    <option
-                      key={m.id}
-                      value={m.id}
-                      className="bg-[#090e1d] text-white"
-                    >
-                      [{m.city}] {m.title}{" "}
-                      {m.status === "CAPTURED" ? "(CAPTURADO)" : ""}
-                    </option>
-                  ))}
-                </select>
+            {/* ACTIVE MISSION DISPLAY (LOCK TO THE CURRENT HUNT, NO BULKY FULL-SCREEN DROPDOWN) */}
+            {selectedMission && (
+              <div className="rf-panel rf-panel-cyan px-2.5 py-1.5 flex items-center justify-between gap-2 shadow-md">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                  <p className="font-handjet font-extrabold text-xs uppercase tracking-wide text-white truncate">
+                    <span className="text-cyan-400 font-bold">
+                      [{selectedMission.city}]
+                    </span>{" "}
+                    <span>{selectedMission.title}</span>
+                  </p>
+                </div>
+                <span className="rf-nameplate text-[9px] text-emerald-300 shrink-0 py-0.5 px-1.5 border-emerald-500/50">
+                  {selectedMission.status === "CAPTURED"
+                    ? "CAPTURADO"
+                    : "DROP ACTIVO"}
+                </span>
               </div>
             )}
 
+            {/* THERMAL HUD STATUS BADGE WITH HEAVY BLACK TYPOGRAPHY */}
             <div
-              className="px-3 py-2 rf-panel text-center shadow-lg transition-all flex items-center justify-center gap-2 overflow-hidden relative"
+              className="px-3 py-1.5 rf-panel text-center shadow-2xl transition-all flex items-center justify-center gap-2.5 overflow-hidden relative"
               style={{
                 backgroundColor: thermalStyle.bg,
                 borderColor: thermalStyle.border,
@@ -762,12 +765,17 @@ export function RadarGameClient({
               }}
             >
               {currentThermal === "QUEMANDO" && (
-                <div className="absolute top-0 right-0 w-20 h-2 rf-hazard-stripes" />
+                <div className="absolute top-0 right-0 w-24 h-2.5 rf-hazard-stripes" />
               )}
               <ThermalStatusIcon state={currentThermal} />
-              <p className="font-handjet font-bold text-sm tracking-wider leading-relaxed">
-                {thermalStyle.label}
-              </p>
+              <div className="flex items-baseline gap-2">
+                <span className="font-handjet font-black text-xl md:text-2xl tracking-widest uppercase leading-none drop-shadow-[0_2px_0_rgba(0,0,0,0.85)]">
+                  {thermalStyle.title}
+                </span>
+                <span className="font-handjet font-bold text-xs uppercase tracking-wider opacity-95">
+                  {thermalStyle.subtitle}
+                </span>
+              </div>
             </div>
 
             {pingData?.dangerAlert?.active && (
