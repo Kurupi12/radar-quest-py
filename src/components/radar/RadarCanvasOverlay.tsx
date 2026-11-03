@@ -266,6 +266,12 @@ export function RadarCanvasOverlay({
     let tick = 0;
     const particles: FireParticle[] = [];
 
+    // Estado para el ciclo aleatorio de congelamiento / frizado por frío
+    let freezeState: "NORMAL" | "FROZEN" = "NORMAL";
+    let nextFreezeTick = Math.floor(360 + Math.random() * 420); // 6s a 13s iniciales
+    let freezeEndTick = 0;
+    let frozenFrameIdx = 0;
+
     const renderFrame = () => {
       tick += 1;
       const {
@@ -276,11 +282,50 @@ export function RadarCanvasOverlay({
         secondaryColor: sColor,
       } = stateRef.current;
 
-      ctx.imageSmoothingEnabled = false;
-      ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-
       const cx = LOGICAL_WIDTH / 2;
       const cy = LOGICAL_HEIGHT / 2;
+
+      // Control del ciclo de frizado aleatorio en estado CONGELADO (no constante, no repetitivo)
+      if (currentThermal === "CONGELADO" && !vehicle) {
+        if (freezeState === "NORMAL") {
+          if (tick >= nextFreezeTick) {
+            freezeState = "FROZEN";
+            // Duración aleatoria del frizado: 1.8s a 2.6s (110 a 155 frames a 60fps)
+            const duration = Math.floor(110 + Math.random() * 45);
+            freezeEndTick = tick + duration;
+            frozenFrameIdx = Math.floor(tick / 6) % 9;
+          }
+        } else if (freezeState === "FROZEN") {
+          if (tick >= freezeEndTick) {
+            freezeState = "NORMAL";
+            // Próximo congelamiento aleatorio dentro de 7s a 16s (420 a 960 frames)
+            nextFreezeTick = tick + Math.floor(420 + Math.random() * 540);
+
+            // Explosión de fragmentos / esquirlas de hielo al descongelarse
+            for (let k = 0; k < 12; k++) {
+              const angle = Math.random() * Math.PI * 2;
+              const speed = 1.0 + Math.random() * 2.2;
+              particles.push({
+                x: cx + (Math.random() - 0.5) * 16,
+                y: cy + (Math.random() - 0.5) * 20,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed + 0.8,
+                size: Math.random() > 0.4 ? 3 : 2,
+                life: 0,
+                maxLife: 20 + Math.floor(Math.random() * 16),
+                color: Math.random() > 0.5 ? "#bae6fd" : "#ffffff",
+              });
+            }
+          }
+        }
+      } else {
+        // Fuera de CONGELADO o en modo vehículo: restablecer
+        freezeState = "NORMAL";
+        nextFreezeTick = tick + Math.floor(360 + Math.random() * 360);
+      }
+
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
       const cfg = getThermalColors(currentThermal, pColor);
       wavePhase = (wavePhase + cfg.speed) % 150;
@@ -390,45 +435,114 @@ export function RadarCanvasOverlay({
         }
       }
 
-      // 4. Draw 16-bit Hunter Sprite (Jump Celebration when QUEMANDO, Walk otherwise, or Cyber Car)
+      // 4. Draw 16-bit Hunter Sprite (Jump Celebration when QUEMANDO, Walk otherwise, Frozen Shiver, or Cyber Car)
       const isBurning = currentThermal === "QUEMANDO";
+      const isFrozen = freezeState === "FROZEN";
+
       const spriteList = isBurning
         ? jumpImagesRef.current
         : walkImagesRef.current;
       const animSpeed = isBurning ? 5 : 6;
-      const currentIdx =
-        Math.floor(tick / animSpeed) % (spriteList.length || 9);
+
+      // Si está frizado, se detiene en el frame congelado; si no, avanza en bucle
+      const currentIdx = isBurning
+        ? Math.floor(tick / animSpeed) % (spriteList.length || 9)
+        : isFrozen
+        ? frozenFrameIdx
+        : Math.floor(tick / animSpeed) % (spriteList.length || 9);
+
       const spriteImg = spriteList[currentIdx];
+
+      // Temblor involuntario de frío a alta frecuencia (shiver de 1-2px)
+      const shiverX = isFrozen ? (tick % 4 < 2 ? 1 : -1) : 0;
+      const shiverY = isFrozen ? (tick % 6 < 3 ? 0 : 1) : 0;
 
       if (!vehicle && spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
         const drawSize = isBurning ? 48 : 46;
         // Ground shadow (reacts dynamically to vertical jump phase)
         const shadowScale = isBurning
           ? 0.75 + Math.sin(tick * 0.25) * 0.25
+          : isFrozen
+          ? 0.95
           : 1;
+
         ctx.fillStyle = "rgba(10, 4, 24, 0.72)";
         ctx.fillRect(
-          cx - 11 * shadowScale,
+          cx - 11 * shadowScale + shiverX * 0.5,
           cy + 13,
           22 * shadowScale,
           5
         );
 
-        // Render PixelLab 16-bit animated hunter
+        // Render PixelLab 16-bit animated hunter (con temblor si está frizado)
         ctx.drawImage(
           spriteImg,
-          Math.round(cx - drawSize / 2),
-          Math.round(cy - drawSize / 2 - 1),
+          Math.round(cx - drawSize / 2 + shiverX),
+          Math.round(cy - drawSize / 2 - 1 + shiverY),
           drawSize,
           drawSize
         );
+
+        // EFECTO VISUAL: BLOQUE DE HIELO TRANSLÚCIDO 16-BIT & ALIENTO GÉLIDO
+        if (isFrozen) {
+          ctx.save();
+          const iceW = 38;
+          const iceH = 46;
+          const iceX = Math.round(cx - iceW / 2 + shiverX);
+          const iceY = Math.round(cy - iceH / 2 + 1 + shiverY);
+
+          // Prisma de hielo cian/azul gélido translúcido
+          ctx.fillStyle = "rgba(186, 230, 253, 0.42)";
+          ctx.fillRect(iceX, iceY, iceW, iceH);
+
+          // Aristas brillantes de cristal de hielo (blanco puro)
+          ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+          ctx.fillRect(iceX + 2, iceY + 2, iceW - 4, 2);
+          ctx.fillRect(iceX + 2, iceY + 2, 2, iceH - 4);
+
+          // Aristas de refracción oscura
+          ctx.fillStyle = "rgba(14, 116, 144, 0.75)";
+          ctx.fillRect(iceX + iceW - 3, iceY + 2, 2, iceH - 4);
+          ctx.fillRect(iceX + 2, iceY + iceH - 3, iceW - 4, 2);
+
+          // Destello diagonal pixel-art (glint)
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(iceX + 7, iceY + 7, 4, 2);
+          ctx.fillRect(iceX + 8, iceY + 9, 2, 4);
+
+          // Estalagmitas / carámbanos de escarcha en la base y cabeza
+          ctx.fillStyle = "#38bdf8";
+          ctx.fillRect(iceX + 4, iceY + iceH, 3, 4);
+          ctx.fillRect(iceX + 16, iceY + iceH, 4, 6);
+          ctx.fillRect(iceX + 29, iceY + iceH, 3, 4);
+
+          ctx.fillStyle = "#bae6fd";
+          ctx.fillRect(iceX + 9, iceY - 4, 4, 4);
+          ctx.fillRect(iceX + 23, iceY - 5, 5, 5);
+
+          ctx.restore();
+
+          // Partículas de aliento gélido / vapor frío emitidas por la boca
+          if (Math.random() > 0.4) {
+            particles.push({
+              x: cx + 2 + shiverX,
+              y: cy - 7 + shiverY,
+              vx: (Math.random() - 0.5) * 0.4 + 0.35,
+              vy: -0.6 - Math.random() * 0.8,
+              size: Math.random() > 0.5 ? 3 : 2,
+              life: 0,
+              maxLife: 24 + Math.floor(Math.random() * 16),
+              color: Math.random() > 0.35 ? "#bae6fd" : "#ffffff",
+            });
+          }
+        }
       } else {
         // Fallback procedural sprite or cyber vehicle
         const spriteFrame = Math.floor(tick / 18);
         drawHunterSprite16Bit(
           ctx,
-          cx,
-          cy,
+          cx + shiverX,
+          cy + shiverY,
           spriteFrame,
           vehicle,
           sColor,
