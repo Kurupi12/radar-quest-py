@@ -403,6 +403,21 @@ class ArcadeHardwareController {
     this.vibrate([100, 40, 100, 40, 300]);
   }
 
+  /**
+   * Plays the 16-bit retro freeze sound effect (icy wind whoosh + ice crack shimmer)
+   */
+  public playFreezeSound() {
+    if (typeof window === "undefined" || this.muted) return;
+    try {
+      const audio = new Audio("/audio/sfx_freeze.mp3");
+      audio.volume = 0.55;
+      audio.play().catch(() => {});
+      this.vibrate([40, 30, 60]);
+    } catch {
+      // Fallback
+    }
+  }
+
   public vibrate(pattern: number | number[]) {
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
       try {

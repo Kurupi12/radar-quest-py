@@ -190,7 +190,7 @@ El protagonista es un **Cazador Urbano Cyberpunk de 16 bits** (`48x48 px` base, 
 4. **Mecánica Estocástica de Congelamiento ("Freeze & Shiver"):**
    * Activa cuando el jugador se encuentra lejos del tesoro (`CONGELADO` o `FUERA DE ZONA`) caminando.
    * **Temporización No-Repetitiva:** Para evitar que el efecto se sienta mecánico o predecible, utiliza una máquina de estados con ventanas aleatorias: tras una primera demostración a los `~2.1 segundos`, cada congelamiento dura aleatoriamente entre **`1.8 s` y `2.5 s`** (`110–150 frames`), seguido de un intervalo libre variable de **`6 s` a `13 s`** (`360–780 frames`).
-   * **Composición Visual del Frío:** Durante el estado `FROZEN`, la animación de caminata se clava en el fotograma exacto en que lo sorprendió la helada; el sprite sufre un **temblor involuntario de alta frecuencia (*shiver*)** de `±1px`; queda encapsulado dentro de un **prisma cristalino de hielo translúcido** con biseles de refracción blancos/cian, carámbanos de escarcha, vaho gélido saliendo del visor y la onomatopeya pixel-art **`¡BRRR!`**.
+   * **Composición Visual y Sonora del Frío:** Durante el estado `FROZEN`, la animación de caminata se clava en el fotograma exacto en que lo sorprendió la helada; el sprite sufre un **temblor involuntario de alta frecuencia (*shiver*)** de `±1px`; queda encapsulado dentro de un **prisma cristalino de hielo translúcido** con biseles de refracción blancos/cian, carámbanos de escarcha, vaho gélido saliendo del visor y la onomatopeya pixel-art **`¡BRRR!`**. En el milisegundo exacto de entrada se dispara el efecto sonoro dedicado **`sfx_freeze.mp3`** (ráfaga de viento gélido, crujido de escarcha y destello FM chiptune de 3 segundos) con triple vibración háptica `[40, 30, 60] ms`.
    * **Ruptura Física:** Al finalizar el bloqueo, el bloque estalla liberando **14 esquirlas de hielo pixeladas** en abanico radial con velocidad y gravedad individual.
 
 ### 6.2. Sonar Bresenham, Aura Ígnea y Partículas
@@ -230,6 +230,7 @@ Todos los efectos de sonido (SFX) se sintetizan matemáticamente en tiempo de ej
 | **Peligro Rival (`<=65m`)** | `sawtooth` | `880 -> 587 -> 880 Hz` (A5 - D5 - A5) | `[150, 50, 150, 50, 150]` | Sirena de alarma táctica que corta la mezcla musical. |
 | **Power-Up Inicio** | `square` | `330 -> 440 -> 554 -> 659 Hz` (La Mayor) | `[50, 30, 80]` | Confirmación energética de conexión al sistema. |
 | **Fanfarria de Victoria** | `square` | `523.25 -> 659.25 -> 783.99 -> 1046.5 Hz` (C5 -> C6) | `[100, 40, 100, 40, 300]` | Clímax clásico arcade con octava superior sostenida (`260ms`). |
+| **Frizado / Escarcha** | `sfx_freeze.mp3` | Viento gélido + crujido de hielo + shimmer FM | `[40, 30, 60]` | Evento estocástico al congelarse el cazador en `CONGELADO`/`FUERA DE ZONA`. |
 
 ---
 

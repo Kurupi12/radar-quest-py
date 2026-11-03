@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { ThermalState } from "@/types/radar";
+import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
 
 interface FireParticle {
   x: number;
@@ -306,6 +307,7 @@ export function RadarCanvasOverlay({
             // Duración aleatoria del frizado: 1.8s a 2.5s (110 a 150 frames a 60fps)
             freezeDurationTicks = Math.floor(110 + Math.random() * 40);
             frozenFrameIdx = Math.floor(tick / 6) % 9;
+            arcadeHardware.playFreezeSound();
           }
         } else if (freezeState === "FROZEN") {
           if (tick - freezeStartTick >= freezeDurationTicks) {
