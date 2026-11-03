@@ -97,9 +97,15 @@ export function QrClaimModal({
   };
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+    <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
       {/* RETROFUTURISTIC CHASSIS */}
-      <div className="w-full max-w-sm rf-panel rf-panel-cyan p-5 relative overflow-hidden shadow-[0_0_45px_rgba(0,0,0,0.95)]">
+      <div className="w-full max-w-sm rf-panel rf-panel-cyan p-5 relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.95)]">
+        {/* 4 Corner Rivet Screws */}
+        <div className="rf-screw rf-screw-tl" />
+        <div className="rf-screw rf-screw-tr" />
+        <div className="rf-screw rf-screw-bl" />
+        <div className="rf-screw rf-screw-br" />
+
         {/* Top-Right Hazard Warning Caution Tab */}
         <div className="absolute top-0 right-0 w-24 h-3 rf-hazard-stripes-cyan border-b border-l border-cyan-500/60" />
 
@@ -178,21 +184,28 @@ export function QrClaimModal({
           </>
         ) : (
           <div className="text-center space-y-3 py-1">
-            {/* Top Victory Nameplate ("YOU WON" style from reference image) */}
-            <div className="flex justify-center -mt-2 mb-2">
+            {/* Top Victory Tab ("YOU WON" style from reference image) */}
+            <div className="flex justify-center -mt-1 mb-2">
               <div
-                className={`rf-nameplate text-xs ${
+                className={`px-5 py-1.5 rounded-sm text-sm flex items-center justify-center gap-2 ${
                   result.claim?.claimType === "MAJOR_PRIZE"
-                    ? "text-amber-300 border-amber-500 bg-amber-950/80"
-                    : "text-cyan-300 border-cyan-500 bg-cyan-950/80"
+                    ? "rf-tab-won"
+                    : "rf-tab-cyan"
                 }`}
               >
-                <Award className="w-3.5 h-3.5" />
+                <Award className="w-4 h-4 shrink-0 text-amber-950" />
                 <span>
                   {result.claim?.claimType === "MAJOR_PRIZE"
-                    ? "¡VICTORIA OFICIAL! YOU WON"
+                    ? "¡YOU WON! PREMIO MAYOR"
                     : "CUPÓN EXPLORADOR CURIOSO"}
                 </span>
+              </div>
+            </div>
+
+            {/* "REWARDS :" Label (From reference UI kit) */}
+            <div className="flex justify-center my-1">
+              <div className="rf-rewards-banner text-xs">
+                <span>REWARDS :</span>
               </div>
             </div>
 

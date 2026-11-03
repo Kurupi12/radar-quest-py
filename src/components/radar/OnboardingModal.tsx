@@ -69,17 +69,23 @@ export function OnboardingModal({
   };
 
   return (
-    <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-[#05020c]/90 backdrop-blur-md">
+    <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-[#05020c]/90 backdrop-blur-md animate-in fade-in duration-200">
       {/* RETROFUTURISTIC CHASSIS (Based on reference UI Kit) */}
-      <div className="w-full max-w-sm rf-panel rf-panel-gold p-5 relative overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.9)]">
+      <div className="w-full max-w-sm rf-panel rf-panel-gold p-5 relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.95)]">
+        {/* 4 Corner Rivet Screws */}
+        <div className="rf-screw rf-screw-tl" />
+        <div className="rf-screw rf-screw-tr" />
+        <div className="rf-screw rf-screw-bl" />
+        <div className="rf-screw rf-screw-br" />
+
         {/* Top-Right Hazard Warning Caution Tab */}
         <div className="absolute top-0 right-0 w-24 h-3 rf-hazard-stripes border-b border-l border-amber-600/70" />
 
-        {/* Top Riveted Nameplate */}
+        {/* Top Riveted "SIGN IN" Plate (Inspired by reference UI Kit) */}
         <div className="flex justify-center -mt-2 mb-3">
-          <div className="rf-nameplate text-amber-300 text-[10px]">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-            <span>INSERT COIN • REGISTRO EN 3 SEG</span>
+          <div className="px-4 py-1 rounded-sm rf-tab-won text-xs flex items-center gap-1.5 shadow-md">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-950 animate-pulse" />
+            <span>SIGN IN • REGISTRO EN 3 SEG</span>
           </div>
         </div>
 

@@ -389,8 +389,14 @@ export function ArcadeQrScannerModal({
   };
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center p-3 bg-[#090314]/92 backdrop-blur-md">
-      <div className="w-full max-w-[380px] rf-panel rf-panel-cyan p-4 text-white shadow-[0_0_45px_rgba(0,0,0,0.95)] relative overflow-hidden">
+    <div className="absolute inset-0 z-50 flex items-center justify-center p-3 bg-[#090314]/92 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-[380px] rf-panel rf-panel-cyan p-4 text-white shadow-[0_0_50px_rgba(0,0,0,0.95)] relative overflow-hidden">
+        {/* 4 Corner Rivet Screws */}
+        <div className="rf-screw rf-screw-tl" />
+        <div className="rf-screw rf-screw-tr" />
+        <div className="rf-screw rf-screw-bl" />
+        <div className="rf-screw rf-screw-br" />
+
         {/* Top-Right Hazard Warning Caution Tab */}
         <div className="absolute top-0 right-0 w-24 h-3 rf-hazard-stripes-cyan border-b border-l border-cyan-500/60" />
 
@@ -537,25 +543,32 @@ export function ArcadeQrScannerModal({
               isMajor={claimResult.claim?.claimType === "MAJOR_PRIZE"}
             />
 
-            <div className="flex justify-center">
+            <div className="flex justify-center -mt-1 mb-1">
               <div
-                className={`rf-nameplate text-xs ${
+                className={`px-5 py-1.5 rounded-sm text-sm flex items-center justify-center gap-2 ${
                   claimResult.claim?.claimType === "MAJOR_PRIZE"
-                    ? "text-amber-300 border-amber-500 bg-amber-950/80"
-                    : "text-cyan-300 border-cyan-500 bg-cyan-950/80"
+                    ? "rf-tab-won"
+                    : "rf-tab-cyan"
                 }`}
               >
                 {claimResult.claim?.claimType === "MAJOR_PRIZE" ? (
                   <>
-                    <Trophy className="w-3.5 h-3.5" />
-                    <span>¡VICTORIA ATÓMICA! YOU WON</span>
+                    <Trophy className="w-4 h-4 shrink-0 text-amber-950" />
+                    <span>¡YOU WON! PREMIO MAYOR</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
-                    <span>CUPÓN DE CONSUELO DESBLOQUEADO</span>
+                    <Sparkles className="w-4 h-4 shrink-0 text-cyan-950" />
+                    <span>CUPÓN DE CONSUELO</span>
                   </>
                 )}
+              </div>
+            </div>
+
+            {/* "REWARDS :" Label (Directly from reference UI kit) */}
+            <div className="flex justify-center my-1">
+              <div className="rf-rewards-banner text-xs">
+                <span>REWARDS :</span>
               </div>
             </div>
 
