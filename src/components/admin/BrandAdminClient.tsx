@@ -1068,11 +1068,14 @@ export function BrandAdminClient({
               {/* CREATE MISSION FORM */}
               <form
                 onSubmit={handleCreateMission}
-                className="p-5 rounded-2xl bg-[#140b29] border border-purple-500/40 space-y-3.5"
+                className="p-5 rf-panel rf-panel-cyan space-y-3.5 shadow-2xl relative overflow-hidden"
               >
+                {/* Top-Right Hazard Caution Tab */}
+                <div className="absolute top-0 right-0 w-24 h-3 rf-hazard-stripes-cyan border-b border-l border-cyan-500/60" />
+
                 <div className="flex items-center justify-between">
                   <h2 className="font-bold text-base text-white">
-                    Configurar Nueva Misión QR (-1 Crédito)
+                    Configurar Nueva Misión (-1 Crédito)
                   </h2>
                   <span className="text-[10px] text-cyan-300 flex items-center gap-1">
                     <BellRing className="w-3.5 h-3.5" />
@@ -1082,111 +1085,135 @@ export function BrandAdminClient({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase text-slate-400 mb-1">
+                    <label className="block text-[11px] uppercase text-cyan-300 mb-1 font-bold">
                       Ciudad de Paraguay
                     </label>
-                    <select
-                      value={city}
-                      onChange={(e) => handleCityPresetChange(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0518] border border-slate-700 text-sm text-white"
-                    >
-                      {PARAGUAY_CITIES.map((c) => (
-                        <option key={c.name} value={c.name}>
-                          {c.name} ({c.department})
-                        </option>
-                      ))}
-                    </select>
+                    <div className="rf-input-slot rf-input-slot-cyan">
+                      <select
+                        value={city}
+                        onChange={(e) => handleCityPresetChange(e.target.value)}
+                        className="w-full px-3 py-2 bg-transparent text-sm text-white focus:outline-none cursor-pointer"
+                      >
+                        {PARAGUAY_CITIES.map((c) => (
+                          <option
+                            key={c.name}
+                            value={c.name}
+                            className="bg-[#090e1d]"
+                          >
+                            {c.name} ({c.department})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] uppercase text-slate-400 mb-1">
+                    <label className="block text-[11px] uppercase text-cyan-300 mb-1 font-bold">
                       Nodo Físico Reutilizable (Opcional)
                     </label>
-                    <select
-                      value={selectedNodeCode}
-                      onChange={(e) => setSelectedNodeCode(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0518] border border-slate-700 text-sm text-white"
-                    >
-                      <option value="">Generar QR Único Nuevo</option>
-                      {nodes.map((n) => (
-                        <option key={n.id} value={n.code}>
-                          {n.code} — {n.label}
+                    <div className="rf-input-slot rf-input-slot-cyan">
+                      <select
+                        value={selectedNodeCode}
+                        onChange={(e) => setSelectedNodeCode(e.target.value)}
+                        className="w-full px-3 py-2 bg-transparent text-sm text-white focus:outline-none cursor-pointer"
+                      >
+                        <option value="" className="bg-[#090e1d]">
+                          Generar QR Único Nuevo
                         </option>
-                      ))}
-                    </select>
+                        {nodes.map((n) => (
+                          <option
+                            key={n.id}
+                            value={n.code}
+                            className="bg-[#090e1d]"
+                          >
+                            {n.code} — {n.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] uppercase text-slate-400 mb-1">
+                  <label className="block text-[11px] uppercase text-cyan-300 mb-1 font-bold">
                     Nombre de la Misión
                   </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: Drop Secreto Costanera Viernes"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#0b0518] border border-slate-700 text-sm text-white"
-                  />
+                  <div className="rf-input-slot rf-input-slot-cyan">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej: Drop Secreto Costanera Viernes"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="w-full px-3 py-2 bg-transparent text-sm text-white focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] uppercase text-slate-400 mb-1">
+                  <label className="block text-[11px] uppercase text-cyan-300 mb-1 font-bold">
                     Pista Inicial Pública para Cazadores
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Cerca de las letras corpóreas mirando al río..."
-                    value={zoneHint}
-                    onChange={(e) => setZoneHint(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#0b0518] border border-slate-700 text-sm text-white"
-                  />
+                  <div className="rf-input-slot rf-input-slot-cyan">
+                    <input
+                      type="text"
+                      placeholder="Ej: Cerca de las letras corpóreas mirando al río..."
+                      value={zoneHint}
+                      onChange={(e) => setZoneHint(e.target.value)}
+                      className="w-full px-3 py-2 bg-transparent text-sm text-white focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] uppercase text-slate-400 mb-1">
+                    <label className="block text-[11px] uppercase text-amber-300 mb-1 font-bold">
                       Premio Mayor (1er Cazador)
                     </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ej: Pod 15K + Vale Gs. 300.000"
-                      value={prizeTitle}
-                      onChange={(e) => setPrizeTitle(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0518] border border-slate-700 text-sm text-white"
-                    />
+                    <div className="rf-input-slot">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ej: Pod 15K + Vale Gs. 300.000"
+                        value={prizeTitle}
+                        onChange={(e) => setPrizeTitle(e.target.value)}
+                        className="w-full px-3 py-2 bg-transparent text-sm text-white focus:outline-none"
+                      />
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-[11px] uppercase text-slate-400 mb-1">
+                    <label className="block text-[11px] uppercase text-cyan-300 mb-1 font-bold">
                       Pulsos Mínimos (Proof of Hunt)
                     </label>
+                    <div className="rf-input-slot rf-input-slot-cyan">
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={minPings}
+                        onChange={(e) => setMinPings(Number(e.target.value))}
+                        className="w-full px-3 py-2 bg-transparent text-sm text-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] uppercase text-slate-300 mb-1 font-bold">
+                    Cupón Consuelo (Explorador Curioso / Rezagados)
+                  </label>
+                  <div className="rf-input-slot">
                     <input
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={minPings}
-                      onChange={(e) => setMinPings(Number(e.target.value))}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0b0518] border border-slate-700 text-sm text-white"
+                      type="text"
+                      value={consolationTitle}
+                      onChange={(e) => setConsolationTitle(e.target.value)}
+                      className="w-full px-3 py-2 bg-transparent text-sm text-white focus:outline-none"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] uppercase text-slate-400 mb-1">
-                    Cupón Consuelo (Explorador Curioso / Rezagados)
-                  </label>
-                  <input
-                    type="text"
-                    value={consolationTitle}
-                    onChange={(e) => setConsolationTitle(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#0b0518] border border-slate-700 text-sm text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] uppercase text-slate-400 mb-1.5 font-bold">
+                  <label className="block text-[11px] uppercase text-amber-300 mb-1.5 font-bold">
                     Modo de Validación del Ganador
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -1222,7 +1249,8 @@ export function BrandAdminClient({
                         <span>Encuentro Marketing</span>
                       </div>
                       <p className="text-[10px] text-slate-400 leading-tight">
-                        Llegar a &lt;25m para filmar entrega en vivo con equipo de marketing.
+                        Llegar a &lt;25m para filmar entrega en vivo con equipo
+                        de marketing.
                       </p>
                     </button>
 
@@ -1246,7 +1274,7 @@ export function BrandAdminClient({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 font-mono text-xs bg-[#0b0518] p-3 rounded-lg border border-purple-500/30">
+                <div className="grid grid-cols-2 gap-3 font-mono text-xs bg-[#050813] p-3 rounded border border-cyan-500/30">
                   <div>
                     <span className="text-slate-400 block text-[10px]">
                       LATITUD SECRETA
@@ -1262,7 +1290,7 @@ export function BrandAdminClient({
                 </div>
 
                 {builderFeedback && (
-                  <div className="p-3 rounded-lg bg-purple-950/80 border border-purple-400 text-xs text-white">
+                  <div className="p-3 rounded bg-purple-950/80 border border-purple-400 text-xs text-white">
                     {builderFeedback}
                   </div>
                 )}
@@ -1270,7 +1298,7 @@ export function BrandAdminClient({
                 <button
                   type="submit"
                   disabled={savingMission}
-                  className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-sm uppercase tracking-wider cursor-pointer transition flex items-center justify-center gap-2"
+                  className="w-full py-3 rf-btn-gold text-sm tracking-widest flex items-center justify-center gap-2"
                 >
                   <Rocket className="w-4 h-4" />
                   <span>

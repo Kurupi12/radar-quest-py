@@ -98,3 +98,294 @@ h4 {
   color: #cbd5e1 !important;
 }
 
+/* ========================================================================== */
+/* RETROFUTURISTIC SCIFI ARCADE UI SYSTEM (Based on 16-Bit Mech/Cyberpunk HUD)*/
+/* ========================================================================== */
+
+/* 1. Chamfered / Cut-Corner Chassis */
+.rf-panel {
+  position: relative;
+  background: #090e1d;
+  border: 2px solid #475569;
+  box-shadow:
+    inset 0 0 0 1px #1e293b,
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 4px 20px rgba(0, 0, 0, 0.75);
+  clip-path: polygon(
+    10px 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    10px 100%,
+    0 calc(100% - 10px),
+    0 10px
+  );
+}
+
+.rf-panel-gold {
+  border-color: #d97706;
+  box-shadow:
+    inset 0 0 0 1px #78350f,
+    inset 0 1px 0 rgba(254, 240, 138, 0.35),
+    0 4px 25px rgba(217, 119, 6, 0.25);
+}
+
+.rf-panel-cyan {
+  border-color: #0284c7;
+  box-shadow:
+    inset 0 0 0 1px #0369a1,
+    inset 0 1px 0 rgba(165, 243, 252, 0.35),
+    0 4px 25px rgba(6, 182, 212, 0.25);
+}
+
+/* 2. Hazard Stripes Tabs (Industrial Caution Stripes) */
+.rf-hazard-stripes {
+  background: repeating-linear-gradient(
+    -45deg,
+    #f59e0b,
+    #f59e0b 6px,
+    #1e293b 6px,
+    #1e293b 12px
+  );
+}
+
+.rf-hazard-stripes-cyan {
+  background: repeating-linear-gradient(
+    -45deg,
+    #00f0ff,
+    #00f0ff 6px,
+    #0a1128 6px,
+    #0a1128 12px
+  );
+}
+
+.rf-hazard-stripes-red {
+  background: repeating-linear-gradient(
+    -45deg,
+    #ef4444,
+    #ef4444 6px,
+    #1e1022 6px,
+    #1e1022 12px
+  );
+}
+
+/* 3. Recessed Retrofuturistic Text Box (Inspired by "ENTER LAND #") */
+.rf-input-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #040714;
+  border: 2px solid #334155;
+  box-shadow:
+    inset 0 3px 6px rgba(0, 0, 0, 0.95),
+    inset 0 0 0 1px #0b1120,
+    0 1px 0 rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rf-input-slot:focus-within {
+  border-color: #f59e0b;
+  box-shadow:
+    inset 0 3px 6px rgba(0, 0, 0, 0.95),
+    0 0 12px rgba(245, 158, 11, 0.4);
+}
+
+.rf-input-slot-cyan:focus-within {
+  border-color: #00f0ff;
+  box-shadow:
+    inset 0 3px 6px rgba(0, 0, 0, 0.95),
+    0 0 14px rgba(0, 240, 255, 0.45);
+}
+
+/* 4. Retrofuturistic 3D Mechanical Buttons with Chamfers */
+/* GOLD BUTTON ("SAVE", "YOU WON", "INTERIOR") */
+.rf-btn-gold {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #fef08a 0%, #f59e0b 35%, #d97706 70%, #92400e 100%);
+  border: 2px solid #451a03;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+    0 3px 0 #78350f,
+    0 5px 8px rgba(0, 0, 0, 0.6);
+  color: #1c1917;
+  text-shadow: 0 1px 0 rgba(254, 240, 138, 0.7);
+  font-family: var(--font-handjet), sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.06s ease;
+}
+
+.rf-btn-gold:hover {
+  filter: brightness(1.08);
+}
+
+.rf-btn-gold:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.6),
+    0 0 0 #78350f;
+}
+
+/* CYAN NEON BUTTON ("ENTER EGGLAND", "QUALITY") */
+.rf-btn-cyan {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #a5f3fc 0%, #06b6d4 35%, #0284c7 70%, #0369a1 100%);
+  border: 2px solid #082f49;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+    0 3px 0 #075985,
+    0 5px 8px rgba(0, 0, 0, 0.6);
+  color: #082f49;
+  text-shadow: 0 1px 0 rgba(165, 243, 252, 0.7);
+  font-family: var(--font-handjet), sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.06s ease;
+}
+
+.rf-btn-cyan:hover {
+  filter: brightness(1.08);
+}
+
+.rf-btn-cyan:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.6),
+    0 0 0 #075985;
+}
+
+/* CRIMSON COMBAT BUTTON ("FIND BATTLE", "SIGN IN", "YOU LOSE") */
+.rf-btn-crimson {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #fecaca 0%, #ef4444 35%, #dc2626 70%, #991b1b 100%);
+  border: 2px solid #450a0a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+    0 3px 0 #7f1d1d,
+    0 5px 8px rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  text-shadow: 0 1px 2px #450a0a;
+  font-family: var(--font-handjet), sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.06s ease;
+}
+
+.rf-btn-crimson:hover {
+  filter: brightness(1.08);
+}
+
+.rf-btn-crimson:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.6),
+    0 0 0 #7f1d1d;
+}
+
+/* EMERALD ACTION BUTTON ("USE", "¡LLEGUÉ AL PUNTO!") */
+.rf-btn-emerald {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #bbf7d0 0%, #22c55e 35%, #16a34a 70%, #14532d 100%);
+  border: 2px solid #052e16;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+    0 3px 0 #14532d,
+    0 5px 8px rgba(0, 0, 0, 0.6);
+  color: #052e16;
+  text-shadow: 0 1px 0 rgba(187, 247, 208, 0.7);
+  font-family: var(--font-handjet), sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.06s ease;
+}
+
+.rf-btn-emerald:hover {
+  filter: brightness(1.08);
+}
+
+.rf-btn-emerald:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.6),
+    0 0 0 #14532d;
+}
+
+/* METALLIC STEEL NEUTRAL BUTTON ("CANCEL", "OPCIONES") */
+.rf-btn-steel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 35%, #475569 70%, #1e293b 100%);
+  border: 2px solid #0f172a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+    0 3px 0 #1e293b,
+    0 5px 8px rgba(0, 0, 0, 0.6);
+  color: #f8fafc;
+  text-shadow: 0 1px 2px #0f172a;
+  font-family: var(--font-handjet), sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.06s ease;
+}
+
+.rf-btn-steel:hover {
+  filter: brightness(1.08);
+}
+
+.rf-btn-steel:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.6),
+    0 0 0 #1e293b;
+}
+
+/* 5. Header Riveted Nameplate ("CRYPTO BEASTS", "BEASTS:") */
+.rf-nameplate {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(180deg, #475569 0%, #1e293b 60%, #0f172a 100%);
+  border: 2px solid #64748b;
+  border-bottom: 2px solid #0f172a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  padding: 3px 12px;
+  border-radius: 4px;
+  font-family: var(--font-handjet), sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+

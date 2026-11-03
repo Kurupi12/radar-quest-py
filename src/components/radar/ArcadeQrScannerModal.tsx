@@ -389,17 +389,17 @@ export function ArcadeQrScannerModal({
   };
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center p-3 bg-[#090314]/92 backdrop-blur-sm">
-      <div
-        className="w-full max-w-[380px] rounded-xl p-4 border-2 bg-[#140b29] text-white shadow-[0_0_40px_rgba(255,0,85,0.4)] relative overflow-hidden"
-        style={{ borderColor: brand.secondaryColor }}
-      >
+    <div className="absolute inset-0 z-50 flex items-center justify-center p-3 bg-[#090314]/92 backdrop-blur-md">
+      <div className="w-full max-w-[380px] rf-panel rf-panel-cyan p-4 text-white shadow-[0_0_45px_rgba(0,0,0,0.95)] relative overflow-hidden">
+        {/* Top-Right Hazard Warning Caution Tab */}
+        <div className="absolute top-0 right-0 w-24 h-3 rf-hazard-stripes-cyan border-b border-l border-cyan-500/60" />
+
         <button
           type="button"
           onClick={handleClose}
-          className="absolute top-3 right-3 z-20 p-1.5 rounded bg-slate-900/90 border border-slate-700 text-slate-300 hover:text-white cursor-pointer"
+          className="absolute top-2.5 right-2.5 z-20 p-1.5 rf-btn-steel text-xs"
         >
-          <X className="w-4 h-4" />
+          <X className="w-3.5 h-3.5" />
         </button>
 
         {/* ================================================================ */}
@@ -503,24 +503,25 @@ export function ArcadeQrScannerModal({
                 e.preventDefault();
                 submitDecodedToken(manualCode);
               }}
-              className="pt-1 space-y-2 border-t border-purple-500/30"
+              className="pt-1 space-y-2 border-t border-slate-700/60"
             >
-              <label className="block text-[10px] uppercase text-slate-400 font-bold">
-                ¿Cartel dañado o probando en PC? Ingresá el Nodo QR:
+              <label className="block text-[10px] uppercase text-cyan-300 font-bold tracking-wider">
+                ¿Cartel dañado o probando en PC? Ingresá el Nodo:
               </label>
               <div className="flex gap-1.5">
-                <input
-                  type="text"
-                  placeholder="Ej: RQ-NODE-ENC-01"
-                  value={manualCode}
-                  onChange={(e) => setManualCode(e.target.value)}
-                  className="flex-1 px-2.5 py-2 rounded bg-[#090314] border border-purple-500/50 font-mono text-xs uppercase text-cyan-200 focus:outline-none focus:border-cyan-300"
-                />
+                <div className="flex-1 rf-input-slot rf-input-slot-cyan">
+                  <input
+                    type="text"
+                    placeholder="Ej: RQ-NODE-ENC-01"
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-transparent font-mono text-xs uppercase text-cyan-200 focus:outline-none"
+                  />
+                </div>
                 <button
                   type="submit"
                   disabled={claiming || !manualCode.trim()}
-                  className="px-3 py-2 rounded font-extrabold text-[11px] uppercase text-slate-950 cursor-pointer disabled:opacity-40"
-                  style={{ backgroundColor: brand.secondaryColor }}
+                  className="px-3.5 py-1.5 rf-btn-cyan text-xs disabled:opacity-40"
                 >
                   Validar
                 </button>
@@ -536,30 +537,38 @@ export function ArcadeQrScannerModal({
               isMajor={claimResult.claim?.claimType === "MAJOR_PRIZE"}
             />
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/15 border border-amber-300/60 text-amber-300 font-pixel text-[9px] uppercase">
-              {claimResult.claim?.claimType === "MAJOR_PRIZE" ? (
-                <>
-                  <Trophy className="w-3.5 h-3.5" />
-                  <span>¡VICTORIA ATÓMICA! PREMIO MAYOR</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
-                  <span>CUPÓN DE CONSUELO DESBLOQUEADO</span>
-                </>
-              )}
+            <div className="flex justify-center">
+              <div
+                className={`rf-nameplate text-xs ${
+                  claimResult.claim?.claimType === "MAJOR_PRIZE"
+                    ? "text-amber-300 border-amber-500 bg-amber-950/80"
+                    : "text-cyan-300 border-cyan-500 bg-cyan-950/80"
+                }`}
+              >
+                {claimResult.claim?.claimType === "MAJOR_PRIZE" ? (
+                  <>
+                    <Trophy className="w-3.5 h-3.5" />
+                    <span>¡VICTORIA ATÓMICA! YOU WON</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+                    <span>CUPÓN DE CONSUELO DESBLOQUEADO</span>
+                  </>
+                )}
+              </div>
             </div>
 
-            <p className="text-xs text-slate-200 leading-relaxed">
+            <p className="text-xs text-slate-200 leading-relaxed font-semibold">
               {claimResult.message}
             </p>
 
             {claimResult.claim && (
-              <div className="p-3 rounded-xl bg-[#090314] border-2 border-amber-400/60 space-y-1">
-                <p className="text-[10px] uppercase text-slate-400">
+              <div className="p-3 rounded-lg bg-[#050813] border-2 border-amber-400/60 space-y-1 shadow-inner">
+                <p className="text-[10px] uppercase text-slate-400 tracking-wider">
                   Cupón Oficial • {brand.name}
                 </p>
-                <p className="font-mono text-lg font-extrabold text-amber-300 tracking-widest">
+                <p className="font-mono text-lg font-black text-amber-300 tracking-widest">
                   {claimResult.claim.couponCode}
                 </p>
                 <p className="text-xs font-bold text-cyan-300">
@@ -580,7 +589,7 @@ export function ArcadeQrScannerModal({
                 href={claimResult.claim.whatsappRedeemUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition"
+                className="w-full py-2.5 px-4 rf-btn-emerald text-xs tracking-wider flex items-center justify-center gap-2"
               >
                 <span>CANJEAR EN WHATSAPP DE {brand.name}</span>
                 <ExternalLink className="w-4 h-4" />

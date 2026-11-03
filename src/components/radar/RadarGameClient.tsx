@@ -730,18 +730,21 @@ export function RadarGameClient({
             )}
 
             {missions.length > 0 && (
-              <div className="flex items-center gap-1.5">
+              <div className="rf-input-slot rf-input-slot-cyan px-2.5 py-1">
                 <MapPin
-                  className="w-3.5 h-3.5 shrink-0"
-                  style={{ color: brand.secondaryColor }}
+                  className="w-3.5 h-3.5 shrink-0 text-cyan-400 mr-1.5"
                 />
                 <select
                   value={selectedMissionId}
                   onChange={(e) => setSelectedMissionId(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded bg-[#140b29]/95 border border-purple-500/60 text-white font-handjet text-sm font-bold tracking-wide focus:outline-none"
+                  className="w-full bg-transparent text-white font-handjet text-sm font-bold tracking-wide focus:outline-none cursor-pointer"
                 >
                   {missions.map((m) => (
-                    <option key={m.id} value={m.id}>
+                    <option
+                      key={m.id}
+                      value={m.id}
+                      className="bg-[#090e1d] text-white"
+                    >
                       [{m.city}] {m.title}{" "}
                       {m.status === "CAPTURED" ? "(CAPTURADO)" : ""}
                     </option>
@@ -751,13 +754,16 @@ export function RadarGameClient({
             )}
 
             <div
-              className="px-3 py-2 rounded-lg border-2 text-center shadow-lg transition-all flex items-center justify-center gap-2"
+              className="px-3 py-2 rf-panel text-center shadow-lg transition-all flex items-center justify-center gap-2 overflow-hidden relative"
               style={{
                 backgroundColor: thermalStyle.bg,
                 borderColor: thermalStyle.border,
                 color: thermalStyle.text,
               }}
             >
+              {currentThermal === "QUEMANDO" && (
+                <div className="absolute top-0 right-0 w-20 h-2 rf-hazard-stripes" />
+              )}
               <ThermalStatusIcon state={currentThermal} />
               <p className="font-handjet font-bold text-sm tracking-wider leading-relaxed">
                 {thermalStyle.label}
@@ -790,8 +796,11 @@ export function RadarGameClient({
           {/* BOTTOM ARCADE CONTROLS */}
           <footer className="absolute bottom-0 inset-x-0 z-20 p-2.5 space-y-2 bg-gradient-to-t from-[#090314] via-[#0d061f]/95 to-transparent">
             {selectedMission && (
-              <div className="p-2.5 rounded-lg bg-[#140b29]/95 border border-purple-500/40 space-y-1.5">
-                <div className="flex items-center justify-between gap-2 text-[10px]">
+              <div className="p-2.5 rf-panel rf-panel-gold relative overflow-hidden space-y-1.5 shadow-xl">
+                {/* Top-Right Hazard Caution Tab */}
+                <div className="absolute top-0 right-0 w-20 h-2.5 rf-hazard-stripes border-b border-l border-amber-600/70" />
+
+                <div className="flex items-center justify-between gap-2 text-[10px] pr-20">
                   <span className="font-handjet text-sm font-bold uppercase text-amber-300 tracking-wide truncate flex items-center gap-1.5">
                     <Gift className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">
@@ -818,7 +827,7 @@ export function RadarGameClient({
             )}
 
             {showSimBar && (
-              <div className="p-2 rounded-lg bg-slate-950/95 border border-cyan-500/50 space-y-1.5">
+              <div className="p-2.5 rf-panel rf-panel-cyan space-y-1.5">
                 <div className="flex items-center justify-between text-[10px] text-cyan-300 font-bold">
                   <span className="flex items-center gap-1.5">
                     <Gamepad2 className="w-3.5 h-3.5" />
@@ -827,10 +836,8 @@ export function RadarGameClient({
                   <button
                     type="button"
                     onClick={() => setGpsMode("real")}
-                    className={`px-1.5 py-0.5 rounded cursor-pointer ${
-                      gpsMode === "real"
-                        ? "bg-cyan-400 text-slate-950"
-                        : "bg-slate-800 text-slate-300"
+                    className={`px-2 py-0.5 rf-btn-steel text-[9px] ${
+                      gpsMode === "real" ? "opacity-100" : "opacity-60"
                     }`}
                   >
                     Usar GPS Real
@@ -840,7 +847,7 @@ export function RadarGameClient({
                   <button
                     type="button"
                     onClick={() => triggerDemoStep("CONGELADO")}
-                    className="py-1 px-1.5 rounded bg-sky-900/80 hover:bg-sky-800 text-sky-200 border border-sky-500/40 cursor-pointer flex items-center justify-center gap-1"
+                    className="py-1 px-1.5 rf-btn-cyan text-[10px] flex items-center justify-center gap-1"
                   >
                     <Snowflake className="w-3 h-3" />
                     <span>Congelado</span>
@@ -848,7 +855,7 @@ export function RadarGameClient({
                   <button
                     type="button"
                     onClick={() => triggerDemoStep("TIBIO")}
-                    className="py-1 px-1.5 rounded bg-yellow-900/80 hover:bg-yellow-800 text-yellow-200 border border-yellow-500/40 cursor-pointer flex items-center justify-center gap-1"
+                    className="py-1 px-1.5 rf-btn-gold text-[10px] flex items-center justify-center gap-1"
                   >
                     <Zap className="w-3 h-3" />
                     <span>Tibio</span>
@@ -856,7 +863,7 @@ export function RadarGameClient({
                   <button
                     type="button"
                     onClick={() => triggerDemoStep("CALIENTE")}
-                    className="py-1 px-1.5 rounded bg-orange-900/80 hover:bg-orange-800 text-orange-200 border border-orange-500/40 cursor-pointer flex items-center justify-center gap-1"
+                    className="py-1 px-1.5 rf-btn-gold text-[10px] flex items-center justify-center gap-1"
                   >
                     <Thermometer className="w-3 h-3" />
                     <span>Caliente</span>
@@ -864,7 +871,7 @@ export function RadarGameClient({
                   <button
                     type="button"
                     onClick={() => triggerDemoStep("QUEMANDO")}
-                    className="py-1 px-1.5 rounded bg-red-700/90 hover:bg-red-600 text-yellow-200 border border-yellow-400 cursor-pointer flex items-center justify-center gap-1"
+                    className="py-1 px-1.5 rf-btn-crimson text-[10px] flex items-center justify-center gap-1"
                   >
                     <Flame className="w-3 h-3" />
                     <span>¡Quemando!</span>
@@ -872,7 +879,7 @@ export function RadarGameClient({
                   <button
                     type="button"
                     onClick={() => triggerDemoStep("VEHICLE")}
-                    className="py-1 px-1.5 rounded bg-amber-900/80 hover:bg-amber-800 text-amber-200 border border-amber-500/40 cursor-pointer flex items-center justify-center gap-1"
+                    className="py-1 px-1.5 rf-btn-steel text-[10px] flex items-center justify-center gap-1"
                   >
                     <Car className="w-3 h-3" />
                     <span>Auto 75km/h</span>
@@ -880,7 +887,7 @@ export function RadarGameClient({
                   <button
                     type="button"
                     onClick={() => triggerDemoStep("TELEPORT")}
-                    className="py-1 px-1.5 rounded bg-purple-950 hover:bg-purple-900 text-pink-300 border border-pink-500/50 cursor-pointer flex items-center justify-center gap-1"
+                    className="py-1 px-1.5 rf-btn-crimson text-[10px] flex items-center justify-center gap-1"
                   >
                     <ShieldAlert className="w-3 h-3" />
                     <span>Teleport</span>
@@ -908,7 +915,7 @@ export function RadarGameClient({
                   <button
                     type="button"
                     onClick={() => setShowSimBar((s) => !s)}
-                    className="p-2 rounded bg-slate-900/95 border border-slate-700 text-cyan-300 hover:border-cyan-400 cursor-pointer"
+                    className="p-2 rf-btn-steel text-cyan-300"
                     title="Simulador GPS QA"
                   >
                     <Gamepad2 className="w-4 h-4" />
@@ -922,7 +929,7 @@ export function RadarGameClient({
                       type="button"
                       onClick={handlePresentialClaim}
                       disabled={presentialClaiming}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-extrabold text-xs uppercase text-slate-950 bg-emerald-400 hover:bg-emerald-300 border-2 border-white shadow-[0_0_18px_rgba(52,211,153,0.85)] animate-pulse active:scale-95 transition cursor-pointer"
+                      className="flex items-center gap-1.5 px-3.5 py-2 rf-btn-emerald text-xs"
                     >
                       <MapPin className="w-4 h-4" />
                       <span>
@@ -936,7 +943,7 @@ export function RadarGameClient({
                       <button
                         type="button"
                         disabled
-                        className="flex items-center gap-1 px-2.5 py-2 rounded-lg font-bold text-[10px] uppercase bg-slate-900/90 border border-slate-700 text-slate-500 cursor-not-allowed select-none"
+                        className="flex items-center gap-1 px-2.5 py-2 rf-btn-steel text-[10px] opacity-60 cursor-not-allowed select-none"
                         title="Se habilita al llegar al punto secreto (<30m a pie)"
                       >
                         <Lock className="w-3.5 h-3.5" />
@@ -951,7 +958,7 @@ export function RadarGameClient({
                     <button
                       type="button"
                       onClick={() => setShowInAppScanner(true)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-extrabold text-xs uppercase text-slate-950 bg-amber-300 hover:bg-amber-200 border-2 border-white shadow-[0_0_18px_rgba(253,224,71,0.85)] animate-pulse active:scale-95 transition cursor-pointer"
+                      className="flex items-center gap-1.5 px-3.5 py-2 rf-btn-gold text-xs"
                     >
                       <Camera className="w-4 h-4" />
                       <span>ESCANEAR QR</span>
@@ -960,7 +967,7 @@ export function RadarGameClient({
                     <button
                       type="button"
                       disabled
-                      className="flex items-center gap-1 px-2.5 py-2 rounded-lg font-bold text-[10px] uppercase bg-slate-900/90 border border-slate-700 text-slate-500 cursor-not-allowed select-none"
+                      className="flex items-center gap-1 px-2.5 py-2 rf-btn-steel text-[10px] opacity-60 cursor-not-allowed select-none"
                       title="Se habilita únicamente en estado ¡QUEMANDO! (<30m y a pie <20 km/h)"
                     >
                       <Lock className="w-3.5 h-3.5" />
