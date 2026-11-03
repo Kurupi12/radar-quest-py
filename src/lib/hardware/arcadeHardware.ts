@@ -135,7 +135,7 @@ class ArcadeHardwareController {
       }
     }
     if (this.audioCtx && this.audioCtx.state === "suspended") {
-      this.audioCtx.resume().catch(() => {});
+      this.audioCtx.resume().catch(() => { });
     }
     return this.audioCtx;
   }
@@ -195,7 +195,7 @@ class ArcadeHardwareController {
         if (currentAudio) {
           this.safeSetVolume(currentAudio, nextVolume);
           if (currentAudio.paused) {
-            currentAudio.play().catch(() => {});
+            currentAudio.play().catch(() => { });
           }
         }
       }
@@ -237,12 +237,12 @@ class ArcadeHardwareController {
         outgoing.pause();
       }
       this.safeSetVolume(incoming, nextVolume);
-      incoming.play().catch(() => {});
+      incoming.play().catch(() => { });
       return;
     }
 
     const startOutVol = outgoing.volume || BGM_DEFAULT_VOLUMES[prevTrack];
-    incoming.play().catch(() => {});
+    incoming.play().catch(() => { });
 
     let step = 0;
     const totalSteps = nextTrack === "climax" ? 12 : 18;
@@ -410,8 +410,8 @@ class ArcadeHardwareController {
     if (typeof window === "undefined" || this.muted) return;
     try {
       const audio = new Audio("/audio/sfx_freeze.mp3");
-      audio.volume = 0.3;
-      audio.play().catch(() => {});
+      audio.volume = 0.2;
+      audio.play().catch(() => { });
       this.vibrate([40, 30, 60]);
     } catch {
       // Fallback
