@@ -208,6 +208,7 @@ export function RadarCanvasOverlay({
 }: RadarCanvasOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const walkImagesRef = useRef<HTMLImageElement[]>([]);
+  const flamesImgRef = useRef<HTMLImageElement | null>(null);
   const stateRef = useRef({
     thermalState,
     inVehicleMode,
@@ -216,7 +217,7 @@ export function RadarCanvasOverlay({
     secondaryColor,
   });
 
-  // Preload PixelLab walk animation frames (frame_0.png to frame_8.png)
+  // Preload PixelLab walk animation frames & thermal flames spritesheet
   useEffect(() => {
     const images: HTMLImageElement[] = [];
     for (let i = 0; i < 9; i++) {
@@ -225,6 +226,10 @@ export function RadarCanvasOverlay({
       images.push(img);
     }
     walkImagesRef.current = images;
+
+    const flamesImg = new Image();
+    flamesImg.src = "/sprites/flames/flames_sheet.png";
+    flamesImgRef.current = flamesImg;
   }, []);
 
   stateRef.current = {
@@ -338,6 +343,43 @@ export function RadarCanvasOverlay({
         );
       }
       ctx.globalAlpha = 1;
+
+      // 3.5. Render PixelLab 16-bit Thermal Flame Aura when HOT or BURNING
+      if (
+        (currentThermal === "CALIENTE" || currentThermal === "QUEMANDO") &&
+        !vehicle
+      ) {
+        const flamesImg = flamesImgRef.current;
+        if (flamesImg && flamesImg.complete && flamesImg.naturalWidth > 0) {
+          const flameFrameIdx = Math.floor(tick / 5) % 8;
+          const sx = flameFrameIdx * 68;
+          const sy = 0;
+          const sw = 68;
+          const sh = 103;
+
+          const isBurning = currentThermal === "QUEMANDO";
+          const flameW = isBurning ? 64 : 52;
+          const flameH = Math.round(flameW * (103 / 68));
+          // Pivot at character feet: (cx, cy + 13)
+          const flameX = Math.round(cx - flameW / 2);
+          const flameY = Math.round(cy + 13 - flameH * 0.854);
+
+          ctx.save();
+          ctx.globalAlpha = isBurning ? 0.95 : 0.78;
+          ctx.drawImage(
+            flamesImg,
+            sx,
+            sy,
+            sw,
+            sh,
+            flameX,
+            flameY,
+            flameW,
+            flameH
+          );
+          ctx.restore();
+        }
+      }
 
       // 4. Draw 16-bit Hunter Sprite (PixelLab Walk Animation or Cyber Car)
       const walkImages = walkImagesRef.current;

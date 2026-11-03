@@ -1,0 +1,235 @@
+{
+ "frames": [
+  {
+   "filename": "thermal-neon-flames 0.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 68,
+    "h": 103
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 68,
+    "h": 103
+   },
+   "sourceSize": {
+    "w": 68,
+    "h": 103
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8543689320388349
+   },
+   "duration": 83
+  },
+  {
+   "filename": "thermal-neon-flames 1.png",
+   "frame": {
+    "x": 68,
+    "y": 0,
+    "w": 68,
+    "h": 103
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 68,
+    "h": 103
+   },
+   "sourceSize": {
+    "w": 68,
+    "h": 103
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8543689320388349
+   },
+   "duration": 83
+  },
+  {
+   "filename": "thermal-neon-flames 2.png",
+   "frame": {
+    "x": 136,
+    "y": 0,
+    "w": 68,
+    "h": 103
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 68,
+    "h": 103
+   },
+   "sourceSize": {
+    "w": 68,
+    "h": 103
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8543689320388349
+   },
+   "duration": 83
+  },
+  {
+   "filename": "thermal-neon-flames 3.png",
+   "frame": {
+    "x": 0,
+    "y": 103,
+    "w": 68,
+    "h": 103
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 68,
+    "h": 103
+   },
+   "sourceSize": {
+    "w": 68,
+    "h": 103
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8543689320388349
+   },
+   "duration": 83
+  },
+  {
+   "filename": "thermal-neon-flames 4.png",
+   "frame": {
+    "x": 68,
+    "y": 103,
+    "w": 68,
+    "h": 103
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 68,
+    "h": 103
+   },
+   "sourceSize": {
+    "w": 68,
+    "h": 103
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8543689320388349
+   },
+   "duration": 83
+  },
+  {
+   "filename": "thermal-neon-flames 5.png",
+   "frame": {
+    "x": 136,
+    "y": 103,
+    "w": 68,
+    "h": 103
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 68,
+    "h": 103
+   },
+   "sourceSize": {
+    "w": 68,
+    "h": 103
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8543689320388349
+   },
+   "duration": 83
+  },
+  {
+   "filename": "thermal-neon-flames 6.png",
+   "frame": {
+    "x": 0,
+    "y": 206,
+    "w": 68,
+    "h": 103
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 68,
+    "h": 103
+   },
+   "sourceSize": {
+    "w": 68,
+    "h": 103
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8543689320388349
+   },
+   "duration": 83
+  },
+  {
+   "filename": "thermal-neon-flames 7.png",
+   "frame": {
+    "x": 68,
+    "y": 206,
+    "w": 68,
+    "h": 103
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 68,
+    "h": 103
+   },
+   "sourceSize": {
+    "w": 68,
+    "h": 103
+   },
+   "pivot": {
+    "x": 0.5,
+    "y": 0.8543689320388349
+   },
+   "duration": 83
+  }
+ ],
+ "meta": {
+  "app": "PixelLab VFX Creator",
+  "image": "thermal-neon-flames.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 204,
+   "h": 309
+  },
+  "scale": "1",
+  "anchor": {
+   "kind": "origin",
+   "x": 34,
+   "y": 88
+  },
+  "frameTags": [
+   {
+    "name": "thermal-neon-flames",
+    "from": 0,
+    "to": 7,
+    "direction": "forward"
+   }
+  ]
+ }
+}
