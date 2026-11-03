@@ -63,6 +63,22 @@ h4 {
   background-size: 100% 4px;
 }
 
+@keyframes arcadeLaserScan {
+  0% {
+    top: 8%;
+  }
+  50% {
+    top: 92%;
+  }
+  100% {
+    top: 8%;
+  }
+}
+
+.animate-laser-scan {
+  animation: arcadeLaserScan 2.2s ease-in-out infinite;
+}
+
 /* 16-bit stepped arcade border effect */
 .arcade-card {
   background: rgba(20, 11, 41, 0.92);

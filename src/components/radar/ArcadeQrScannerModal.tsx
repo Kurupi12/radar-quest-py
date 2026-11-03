@@ -315,46 +315,57 @@ export function ArcadeQrScannerModal({
             : "JSQR FALLBACK ENGINE (60FPS)"
         );
 
+        let isProcessing = false;
+
         const scanFrame = async () => {
-          if (!active || claimingLockRef.current) return;
+          if (!active || claimingLockRef.current || isProcessing) return;
           const video = videoRef.current;
           if (!video || video.readyState < 2) return;
 
-          // 1. Primary Engine: Native BarcodeDetector API
-          if (nativeDetector) {
-            try {
-              const codes = await nativeDetector.detect(video);
-              if (codes.length > 0 && codes[0].rawValue) {
-                await submitDecodedToken(codes[0].rawValue);
-                return;
+          isProcessing = true;
+          try {
+            // 1. Primary Engine: Native BarcodeDetector API
+            if (nativeDetector) {
+              try {
+                const codes = await nativeDetector.detect(video);
+                if (codes.length > 0 && codes[0]?.rawValue) {
+                  await submitDecodedToken(codes[0].rawValue);
+                  return;
+                }
+              } catch {
+                // If native detector fails on device GPU, switch permanently to jsQR
+                nativeDetector = null;
+                setEngineLabel("JSQR FALLBACK ENGINE (60FPS)");
               }
-            } catch {
-              // Fall through seamlessly to jsQR fallback on frame error
-            }
-          }
-
-          // 2. Fallback Engine: jsQR over offscreen canvas frame
-          const canvas = workCanvasRef.current;
-          if (canvas && video.videoWidth > 0 && video.videoHeight > 0) {
-            const size = 320;
-            canvas.width = size;
-            canvas.height = size;
-            const ctx = canvas.getContext("2d", { willReadFrequently: true });
-            if (ctx) {
-              ctx.drawImage(video, 0, 0, size, size);
-              const imageData = ctx.getImageData(0, 0, size, size);
-              const decoded = jsQR(imageData.data, size, size, {
-                inversionAttempts: "dontInvert",
-              });
-              if (decoded && decoded.data) {
-                await submitDecodedToken(decoded.data);
-                return;
+            } else {
+              // 2. Fallback Engine: jsQR (only when native is not available)
+              const canvas = workCanvasRef.current;
+              if (canvas && video.videoWidth > 0 && video.videoHeight > 0) {
+                const size = 320;
+                if (canvas.width !== size || canvas.height !== size) {
+                  canvas.width = size;
+                  canvas.height = size;
+                }
+                const ctx = canvas.getContext("2d", { willReadFrequently: true });
+                if (ctx) {
+                  ctx.drawImage(video, 0, 0, size, size);
+                  const imageData = ctx.getImageData(0, 0, size, size);
+                  const decoded = jsQR(imageData.data, size, size, {
+                    inversionAttempts: "dontInvert",
+                  });
+                  if (decoded && decoded.data) {
+                    await submitDecodedToken(decoded.data);
+                    return;
+                  }
+                }
               }
             }
+          } finally {
+            isProcessing = false;
           }
         };
 
-        scanTimer = window.setInterval(scanFrame, 120);
+        scanTimer = window.setInterval(scanFrame, 150);
       } catch {
         setCameraError(
           "Permiso de cámara denegado o sin webcam disponible. Podés reintentar o validar el código del cartel abajo."
@@ -415,6 +426,7 @@ export function ArcadeQrScannerModal({
             <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#080312] border-2 border-cyan-400/60">
               <video
                 ref={videoRef}
+                autoPlay
                 playsInline
                 muted
                 className="w-full h-full object-cover"
@@ -445,8 +457,8 @@ export function ArcadeQrScannerModal({
                     <div className="w-4 h-4 border-2 border-amber-300 bg-amber-300/20" />
                   </div>
 
-                  {/* Animated Laser Scan Bar */}
-                  <div className="absolute inset-x-2 top-1/2 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_12px_#ef4444] animate-pulse" />
+                  {/* Animated Laser Scan Bar (Fluido hacia arriba y abajo) */}
+                  <div className="absolute inset-x-2 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_12px_#00f0ff] animate-laser-scan" />
                 </div>
               </div>
 
