@@ -1,0 +1,38 @@
+{
+  "id": "a3528c94-2ece-442c-bf64-47dd1d641a58",
+  "name": "cyberpunk urban treasure hunter, dark hoodie, glow...",
+  "state_name": "Idle",
+  "prompt": "cyberpunk urban treasure hunter, dark hoodie, glowing cyan visor, explorer backpack with radar antenna, retro sneakers, 16-bit arcade pixel art game sprite",
+  "size": {
+    "width": 48,
+    "height": 48
+  },
+  "directions": 4,
+  "created_at": "2026-11-03T02:39:37.665838+00:00",
+  "updated_at": "2026-11-03T02:40:22.219395+00:00",
+  "animation_count": 0,
+  "template_id": "mannequin",
+  "view": "low top-down",
+  "status": "completed",
+  "rotation_urls": {
+    "south": "https://backblaze.pixellab.ai/file/pixellab-characters/485d380f-f548-465b-ba3f-374e6813414a/a3528c94-2ece-442c-bf64-47dd1d641a58/rotations/south.png?t=1793673622",
+    "west": "https://backblaze.pixellab.ai/file/pixellab-characters/485d380f-f548-465b-ba3f-374e6813414a/a3528c94-2ece-442c-bf64-47dd1d641a58/rotations/west.png?t=1793673622",
+    "east": "https://backblaze.pixellab.ai/file/pixellab-characters/485d380f-f548-465b-ba3f-374e6813414a/a3528c94-2ece-442c-bf64-47dd1d641a58/rotations/east.png?t=1793673622",
+    "north": "https://backblaze.pixellab.ai/file/pixellab-characters/485d380f-f548-465b-ba3f-374e6813414a/a3528c94-2ece-442c-bf64-47dd1d641a58/rotations/north.png?t=1793673622",
+    "south-east": null,
+    "north-east": null,
+    "north-west": null,
+    "south-west": null
+  },
+  "style_settings": {
+    "detail": "medium detail",
+    "outline": "single color black outline",
+    "shading": "basic shading"
+  },
+  "guidance": null,
+  "ai_freedom": null,
+  "tags": [],
+  "group_id": "07c3109b-78f8-4d06-b60b-77b11b7319ae",
+  "skeletons": null,
+  "animations": []
+}
