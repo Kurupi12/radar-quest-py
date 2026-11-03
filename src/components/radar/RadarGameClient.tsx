@@ -219,6 +219,10 @@ export function RadarGameClient({
   const coordsRef = useRef(coords);
   coordsRef.current = coords;
 
+  const handleOverlayCanvasReady = useCallback((c: HTMLCanvasElement) => {
+    overlayCanvasRef.current = c;
+  }, []);
+
   // 1. Restore session from localStorage & verify HMAC cookie
   useEffect(() => {
     let cancelled = false;
@@ -633,9 +637,7 @@ export function RadarGameClient({
             dangerAlertActive={Boolean(pingData?.dangerAlert?.active)}
             primaryColor={brand.primaryColor}
             secondaryColor={brand.secondaryColor}
-            onCanvasReady={(c) => {
-              overlayCanvasRef.current = c;
-            }}
+            onCanvasReady={handleOverlayCanvasReady}
           />
 
           <div className="crt-scanlines pointer-events-none absolute inset-0 z-10 opacity-45" />

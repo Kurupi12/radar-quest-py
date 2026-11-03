@@ -210,6 +210,12 @@ export function RadarCanvasOverlay({
   const walkImagesRef = useRef<HTMLImageElement[]>([]);
   const jumpImagesRef = useRef<HTMLImageElement[]>([]);
   const flamesImgRef = useRef<HTMLImageElement | null>(null);
+  const onCanvasReadyRef = useRef(onCanvasReady);
+
+  useEffect(() => {
+    onCanvasReadyRef.current = onCanvasReady;
+  }, [onCanvasReady]);
+
   const stateRef = useRef({
     thermalState,
     inVehicleMode,
@@ -257,8 +263,8 @@ export function RadarCanvasOverlay({
     if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
 
-    if (onCanvasReady) {
-      onCanvasReady(canvas);
+    if (onCanvasReadyRef.current) {
+      onCanvasReadyRef.current(canvas);
     }
 
     let animId = 0;
@@ -266,10 +272,12 @@ export function RadarCanvasOverlay({
     let tick = 0;
     const particles: FireParticle[] = [];
 
-    // Estado para el ciclo aleatorio de congelamiento / frizado por frío
+    // Estado del ciclo estocástico de frizado por frío
     let freezeState: "NORMAL" | "FROZEN" = "NORMAL";
-    let nextFreezeTick = Math.floor(360 + Math.random() * 420); // 6s a 13s iniciales
-    let freezeEndTick = 0;
+    let freezeStartTick = 0;
+    let freezeDurationTicks = 130;
+    let nextFreezeIntervalTicks = 130; // Primer congelamiento ocurre a los ~2 segundos de entrar
+    let lastCycleEndTick = 0;
     let frozenFrameIdx = 0;
 
     const renderFrame = () => {
@@ -285,26 +293,31 @@ export function RadarCanvasOverlay({
       const cx = LOGICAL_WIDTH / 2;
       const cy = LOGICAL_HEIGHT / 2;
 
-      // Control del ciclo de frizado aleatorio en estado CONGELADO (no constante, no repetitivo)
-      if (currentThermal === "CONGELADO" && !vehicle) {
+      // Se considera estado frío tanto en CONGELADO como en FUERA DE ZONA (lejanía del tesoro)
+      const isCold =
+        (currentThermal === "CONGELADO" || currentThermal === "FUERA DE ZONA") &&
+        !vehicle;
+
+      if (isCold) {
         if (freezeState === "NORMAL") {
-          if (tick >= nextFreezeTick) {
+          if (tick - lastCycleEndTick >= nextFreezeIntervalTicks) {
             freezeState = "FROZEN";
-            // Duración aleatoria del frizado: 1.8s a 2.6s (110 a 155 frames a 60fps)
-            const duration = Math.floor(110 + Math.random() * 45);
-            freezeEndTick = tick + duration;
+            freezeStartTick = tick;
+            // Duración aleatoria del frizado: 1.8s a 2.5s (110 a 150 frames a 60fps)
+            freezeDurationTicks = Math.floor(110 + Math.random() * 40);
             frozenFrameIdx = Math.floor(tick / 6) % 9;
           }
         } else if (freezeState === "FROZEN") {
-          if (tick >= freezeEndTick) {
+          if (tick - freezeStartTick >= freezeDurationTicks) {
             freezeState = "NORMAL";
-            // Próximo congelamiento aleatorio dentro de 7s a 16s (420 a 960 frames)
-            nextFreezeTick = tick + Math.floor(420 + Math.random() * 540);
+            lastCycleEndTick = tick;
+            // Próximo ciclo en intervalo aleatorio entre 6s y 13s (360 a 780 frames)
+            nextFreezeIntervalTicks = Math.floor(360 + Math.random() * 420);
 
-            // Explosión de fragmentos / esquirlas de hielo al descongelarse
-            for (let k = 0; k < 12; k++) {
+            // Explosión de esquirlas de hielo en abanico al descongelarse
+            for (let k = 0; k < 14; k++) {
               const angle = Math.random() * Math.PI * 2;
-              const speed = 1.0 + Math.random() * 2.2;
+              const speed = 1.2 + Math.random() * 2.5;
               particles.push({
                 x: cx + (Math.random() - 0.5) * 16,
                 y: cy + (Math.random() - 0.5) * 20,
@@ -312,16 +325,18 @@ export function RadarCanvasOverlay({
                 vy: Math.sin(angle) * speed + 0.8,
                 size: Math.random() > 0.4 ? 3 : 2,
                 life: 0,
-                maxLife: 20 + Math.floor(Math.random() * 16),
+                maxLife: 22 + Math.floor(Math.random() * 16),
                 color: Math.random() > 0.5 ? "#bae6fd" : "#ffffff",
               });
             }
           }
         }
       } else {
-        // Fuera de CONGELADO o en modo vehículo: restablecer
-        freezeState = "NORMAL";
-        nextFreezeTick = tick + Math.floor(360 + Math.random() * 360);
+        if (freezeState === "FROZEN") {
+          freezeState = "NORMAL";
+          lastCycleEndTick = tick;
+          nextFreezeIntervalTicks = 180;
+        }
       }
 
       ctx.imageSmoothingEnabled = false;
@@ -520,10 +535,18 @@ export function RadarCanvasOverlay({
           ctx.fillRect(iceX + 9, iceY - 4, 4, 4);
           ctx.fillRect(iceX + 23, iceY - 5, 5, 5);
 
+          // Rótulo cómico pixel-art flotando sobre la cabeza del cazador
+          ctx.fillStyle = "#0284c7";
+          ctx.font = "900 12px monospace";
+          ctx.textAlign = "center";
+          ctx.fillText("¡BRRR!", cx + shiverX + 22, cy - 20 + shiverY);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText("¡BRRR!", cx + shiverX + 21, cy - 21 + shiverY);
+
           ctx.restore();
 
           // Partículas de aliento gélido / vapor frío emitidas por la boca
-          if (Math.random() > 0.4) {
+          if (Math.random() > 0.35) {
             particles.push({
               x: cx + 2 + shiverX,
               y: cy - 7 + shiverY,
@@ -562,7 +585,8 @@ export function RadarCanvasOverlay({
 
     animId = window.requestAnimationFrame(renderFrame);
     return () => window.cancelAnimationFrame(animId);
-  }, [onCanvasReady]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <canvas
