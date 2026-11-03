@@ -626,6 +626,11 @@ export function RadarGameClient({
 
   const currentThermal: ThermalState =
     pingData?.thermalState || "FUERA DE ZONA";
+
+  // Conmutar BGM adaptativa según estado térmico (Exploración vs. Tensión en TIBIO / CALIENTE)
+  useEffect(() => {
+    arcadeHardware.syncBgmWithThermalState(currentThermal);
+  }, [currentThermal]);
   const missionValidationMode =
     selectedMission?.validationMode || pingData?.validationMode || "HYBRID";
   const thermalStyle = getThermalBadgeStyle(

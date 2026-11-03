@@ -60,6 +60,12 @@ export default function RootLayout({
     >
       <head>
         <link rel="preload" href="/audio/bgm.mp3" as="audio" type="audio/mpeg" />
+        <link
+          rel="preload"
+          href="/audio/bgm_tension.mp3"
+          as="audio"
+          type="audio/mpeg"
+        />
       </head>
       <body className="antialiased selection:bg-purple-500 selection:text-white font-[family-name:var(--font-space)]">
         <PwaRegistrar />

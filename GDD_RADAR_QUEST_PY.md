@@ -26,7 +26,7 @@ En lugar de mostrar un marcador de destino tradicional, el jugador navega el ent
 | **Core Runtime** | Next.js 16.4 (Turbopack), React 19.3, TypeScript | Orquestación cliente-servidor, rutas dinámicas multi-marca (`/b/[brand]`) y APIs de baja latencia. |
 | **Motor Cartográfico** | MapLibre GL JS 6.16 + Web Workers dedicados | Renderizado vectorial WebGL reprogramado en caliente con paleta cyberpunk de alto contraste y cámara inclinada (`pitch: 22°`). |
 | **Motor Gráfico 2D / VFX** | HTML5 `<canvas>` (`360x640` lógico, `pixelated`) | Loop independiente a **60 FPS** (`requestAnimationFrame`) para spritesheets, ondas Bresenham, fuego, congelamiento estocástico y partículas. |
-| **Audio & Síntesis** | Web Audio API + HTML5 Audio Preloader | Sintetizador chiptune procedimental (`square`, `triangle`, `sawtooth`) + streaming de BGM Synthwave sin latencia. |
+| **Audio & Síntesis** | Web Audio API + Dual-Stem Adaptive BGM | Sintetizador chiptune procedimental (`square`, `triangle`, `sawtooth`) + crossfade dinámico de BGM Synthwave (`100 BPM` exploración / `110 BPM` tensión). |
 | ** Sensores Físicos** | Geolocation API, Screen Wake Lock, Vibration API | Rastreo Haversine de alta precisión, pantalla siempre activa en caminata y feedback háptico rítmico. |
 | **Visión Artificial (QR)** | WebRTC + Native `BarcodeDetector` + `jsQR` | Escáner óptico en tiempo real acelerado por GPU nativa con fallback automático en CPU. |
 | **Motor de Replay Social** | Canvas Compositor (`540x960`) + `MediaRecorder` | Grabación en vivo de partidas en formato vertical `9:16` (MP4/WebM) con HUD retrofuturista incrustado para redes sociales. |
@@ -63,8 +63,8 @@ El servidor evalúa la distancia geodésica exacta mediante la fórmula de **Hav
 | :--- | :--- | :---: | :--- |
 | **`FUERA DE ZONA`** | `> zoneRadiusMeters` (def. `3.500 m`) | `6%` | Jugador fuera del radio operativo de la misión. Sonar lento púrpura y eventos periódicos de congelamiento del avatar. |
 | **`CONGELADO`** | `650 m` a `3.500 m` | `24%` | En zona urbana activa pero lejos del objetivo. Anillos celestes lentos y activación del sistema estocástico de escarcha. |
-| **`TIBIO`** | `160 m` a `650 m` | `52%` | Acercamiento confirmado en el barrio correcto. Anillos amarillos a velocidad media; desaparece el frío. |
-| **`CALIENTE`** | `30 m` a `160 m` *(o `< 30 m` en vehículo)* | `78%` | Proximidad alta. Se enciende el aura de llamas pixel-art y partículas de brasas. Si va a `>= 20 km/h`, el juego bloquea el avance aquí. |
+| **`TIBIO`** | `160 m` a `650 m` | `52%` | Acercamiento confirmado en el barrio correcto. Anillos amarillos, desaparece el frío y la música conmuta con crossfade al tema de tensión (`110 BPM`). |
+| **`CALIENTE`** | `30 m` a `160 m` *(o `< 30 m` en vehículo)* | `78%` | Proximidad alta. Se enciende el aura de llamas pixel-art, sube la ganancia del bajo modular de tensión y, si va a `>= 20 km/h`, bloquea el avance aquí. |
 | **`QUEMANDO`** | **`< 30 m` y velocidad `< 20 km/h` (a pie)** | `98%` | Zona de captura alcanzada. El personaje salta celebrando entre llamas intensas y **se desbloquea el botón de captura**. |
 | **`TELEPORT_ANOMALY`** | Salto `> 500 m` en `<= 45 s` o `> 130 km/h` | `0%` | Penalización Anti-Spoofing activa. Bloquea el progreso de caza y cualquier intento de reclamo. |
 
@@ -204,13 +204,15 @@ El protagonista es un **Cazador Urbano Cyberpunk de 16 bits** (`48x48 px` base, 
 
 ## 7. Diseño Sonoro, Síntesis Chiptune y Retroalimentación Háptica
 
-### 7.1. Sincronización de Arranque y Música Synthwave (BGM)
+### 7.1. Sincronización de Arranque y Música Synthwave Adaptativa (BGM)
 
-Los navegadores modernos bloquean cualquier reproducción de audio automática previa a una interacción humana (*Autoplay Policy*). Radar Quest convierte esta restricción técnica en parte de la fantasía arcade mediante **`RadarPreloader`**:
+Los navegadores modernos bloquean cualquier reproducción de audio automática previa a una interacción humana (*Autoplay Policy*). Radar Quest convierte esta restricción técnica en parte de la fantasía arcade mediante **`RadarPreloader`** y un motor musical dinámico de dos capas en `ArcadeHardwareController`:
 
-1. El documento raíz inyecta `<link rel="preload" href="/audio/bgm.mp3" as="audio">` para iniciar la descarga HTTP en paralelo al HTML.
-2. El preloader muestra una barra segmentada de 16 bloques con telemetría de arranque mientras carga el bucle **Synthwave analógico** (sintetizadores retro, bajo synth y percusión 808 a 100 BPM, calibrado a ganancia `0.35` para no enmascarar los efectos de sonar).
-3. Al llegar al `100%`, el botón pulsante **`[ INICIAR RADAR ]`** captura el gesto táctil del jugador, inicializa el `AudioContext`, dispara la fanfarria de encendido y arranca el BGM exactamente en el milisegundo cero de entrada al mapa.
+1. **Precarga Dual en Paralelo:** El documento raíz inyecta `<link rel="preload" as="audio">` tanto para `/audio/bgm.mp3` como para `/audio/bgm_tension.mp3` mientras el preloader llena la barra segmentada de 16 bloques.
+2. **Desbloqueo Táctil Silencioso para Transiciones Manos Libres:** Al presionar **`[ INICIAR RADAR ]`**, el gesto del jugador inicializa el `AudioContext`, arranca la pista activa en el milisegundo cero y desbloquea en silencio la pista secundaria para que los navegadores móviles (iOS Safari y Android Chrome) permitan cambiar de canción automáticamente por GPS mientras el jugador camina sin tocar la pantalla.
+3. **Re-Secuenciación Horizontal con Crossfade (`syncBgmWithThermalState`):**
+   * **Capa de Exploración (`/audio/bgm.mp3` — `100 BPM`, ganancia `0.35`):** Synthwave analógico nostálgico con sintetizadores cálidos y percusión 808 suave durante los estados lejanos (`FUERA DE ZONA` y `CONGELADO`).
+   * **Capa de Tensión Táctica (`/audio/bgm_tension.mp3` — `110 BPM`, ganancia `0.38` a `0.44`):** *Dark Synthwave* con línea de bajo modular pulsante y percusión rítmica de reloj (*retrofuturistic thriller*). Al cruzar al umbral **`TIBIO`** o **`CALIENTE`** (y sosteniendo la adrenalina en `QUEMANDO`), el motor ejecuta un **crossfade progresivo de `~810 ms`** entre ambas pistas, regresando suavemente al tema de exploración si el cazador vuelve a alejarse.
 
 ### 7.2. Sintetizador Chiptune Procedimental (`ArcadeHardwareController`)
 

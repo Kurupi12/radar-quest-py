@@ -26,15 +26,15 @@ export function RadarPreloader({
   const [hasStarted, setHasStarted] = useState(false);
 
   useEffect(() => {
-    // 1. Iniciar precarga de audio BGM en caché
-    arcadeHardware.preloadBgm("/audio/bgm.mp3", 0.35);
+    // 1. Iniciar precarga de pistas BGM adaptativas (Exploración + Tensión)
+    arcadeHardware.preloadBgm();
 
     // 2. Simulación de inicialización de telemetría y precarga fluida
     const intervals: NodeJS.Timeout[] = [];
 
     const t1 = setTimeout(() => {
       setProgress(35);
-      setStageText("PRECARDANDO BGM SYNTHWAVE...");
+      setStageText("PRECARGANDO BGM ADAPTATIVO...");
     }, 300);
     intervals.push(t1);
 
@@ -68,7 +68,7 @@ export function RadarPreloader({
 
     // Inicializar AudioContext y reproducir BGM dentro del evento de toque (User Gesture)
     arcadeHardware.initAudioContext();
-    arcadeHardware.playBgm("/audio/bgm.mp3", 0.35);
+    arcadeHardware.playBgm();
     arcadeHardware.playPowerUpOnboarding();
     arcadeHardware.requestWakeLock();
 

@@ -25,7 +25,14 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (req.method !== "GET" || req.url.includes("/api/")) return;
+  if (
+    req.method !== "GET" ||
+    req.url.includes("/api/") ||
+    req.url.includes("/audio/") ||
+    req.headers.has("range")
+  ) {
+    return;
+  }
   event.respondWith(
     fetch(req).catch(() =>
       caches.match(req).then((res) => res || caches.match("/"))
