@@ -33,3 +33,5 @@ next-env.d.ts
 # runtime local db snapshots (keep initial seed in code)
 /data/*.tmp
 
+
+.vercel
