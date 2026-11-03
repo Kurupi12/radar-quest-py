@@ -58,6 +58,9 @@ export default function RootLayout({
       lang="es"
       className={`${pressStart.variable} ${vt323.variable} ${spaceGrotesk.variable} ${handjet.variable}`}
     >
+      <head>
+        <link rel="preload" href="/audio/bgm.mp3" as="audio" type="audio/mpeg" />
+      </head>
       <body className="antialiased selection:bg-purple-500 selection:text-white font-[family-name:var(--font-space)]">
         <PwaRegistrar />
         {children}

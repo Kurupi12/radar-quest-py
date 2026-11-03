@@ -38,6 +38,7 @@ import { OnboardingModal } from "@/components/radar/OnboardingModal";
 import { QrClaimModal } from "@/components/radar/QrClaimModal";
 import { ArcadeQrScannerModal } from "@/components/radar/ArcadeQrScannerModal";
 import { ViralRecorder } from "@/components/radar/ViralRecorder";
+import { RadarPreloader } from "@/components/radar/RadarPreloader";
 import { BrandIconSvg } from "@/components/icons/BrandIconSvg";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
 
@@ -195,6 +196,7 @@ export function RadarGameClient({
   const [pingData, setPingData] = useState<RadarPingResponse | null>(null);
   const [muted, setMuted] = useState(false);
   const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [preloaderDismissed, setPreloaderDismissed] = useState(false);
 
   // Web Push Drop Alerts State
   const [pushSubscribed, setPushSubscribed] = useState(false);
@@ -1061,6 +1063,17 @@ export function RadarGameClient({
               currentCoords={coords}
               suggestedCode={demoQrHint}
               onClose={() => setShowExternalClaimModal(false)}
+            />
+          )}
+
+          {/* RETROFUTURISTIC PRELOADER & AUDIO SYNC SCREEN */}
+          {!preloaderDismissed && (
+            <RadarPreloader
+              brandName={brand.name}
+              brandIconKey={brand.logoEmoji}
+              brandLogoUrl={brand.logoUrl}
+              brandPrimaryColor={brand.primaryColor}
+              onStart={() => setPreloaderDismissed(true)}
             />
           )}
         </div>

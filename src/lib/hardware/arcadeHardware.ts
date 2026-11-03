@@ -12,6 +12,22 @@ class ArcadeHardwareController {
   private muted = false;
   private bgmAudio: HTMLAudioElement | null = null;
 
+  public preloadBgm(src = "/audio/bgm.mp3", volume = 0.35) {
+    if (typeof window === "undefined") return;
+    if (!this.bgmAudio) {
+      this.bgmAudio = new Audio();
+      this.bgmAudio.src = src;
+      this.bgmAudio.preload = "auto";
+      this.bgmAudio.loop = true;
+      this.bgmAudio.volume = volume;
+      this.bgmAudio.load();
+    }
+  }
+
+  public initAudioContext(): AudioContext | null {
+    return this.ensureAudio();
+  }
+
   private ensureAudio(): AudioContext | null {
     if (typeof window === "undefined" || this.muted) return null;
     if (!this.audioCtx) {
