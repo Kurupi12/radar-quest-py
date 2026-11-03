@@ -29,7 +29,28 @@ export function RadarPreloader({
     // 1. Iniciar precarga de pistas BGM adaptativas (Exploración + Tensión)
     arcadeHardware.preloadBgm();
 
-    // 2. Simulación de inicialización de telemetría y precarga fluida
+    // 2. Pre-calibrar GPS en segundo plano durante la carga para evitar saltos de cámara
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          try {
+            localStorage.setItem(
+              "rq_last_known_coords",
+              JSON.stringify({
+                lat: Number(pos.coords.latitude.toFixed(6)),
+                lng: Number(pos.coords.longitude.toFixed(6)),
+                accuracy: Math.round(pos.coords.accuracy || 12),
+                savedAt: Date.now(),
+              })
+            );
+          } catch {}
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 4000, maximumAge: 10000 }
+      );
+    }
+
+    // 3. Simulación de inicialización de telemetría y precarga fluida
     const intervals: NodeJS.Timeout[] = [];
 
     const t1 = setTimeout(() => {

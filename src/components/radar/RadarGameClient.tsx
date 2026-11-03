@@ -276,10 +276,27 @@ export function RadarGameClient({
     lat: number;
     lng: number;
     accuracy: number;
-  }>({
-    lat: selectedMission?.publicCenterLat ?? -27.3306,
-    lng: selectedMission?.publicCenterLng ?? -55.8667,
-    accuracy: 12,
+  }>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("rq_last_known_coords");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (typeof parsed?.lat === "number" && typeof parsed?.lng === "number") {
+            return {
+              lat: parsed.lat,
+              lng: parsed.lng,
+              accuracy: parsed.accuracy || 15,
+            };
+          }
+        }
+      } catch {}
+    }
+    return {
+      lat: selectedMission?.publicCenterLat ?? -27.3306,
+      lng: selectedMission?.publicCenterLng ?? -55.8667,
+      accuracy: 12,
+    };
   });
 
   const [gpsMode, setGpsMode] = useState<"real" | "simulator">("real");
@@ -545,6 +562,17 @@ export function RadarGameClient({
           lng: Number(pos.coords.longitude.toFixed(6)),
           accuracy: Math.round(pos.coords.accuracy || 12),
         };
+        try {
+          localStorage.setItem(
+            "rq_last_known_coords",
+            JSON.stringify({
+              lat: next.lat,
+              lng: next.lng,
+              accuracy: next.accuracy,
+              savedAt: Date.now(),
+            })
+          );
+        } catch {}
         setCoords(next);
       },
       () => {},
