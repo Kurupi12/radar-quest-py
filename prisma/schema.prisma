@@ -97,6 +97,7 @@ model Mission {
   prizeTitle             String
   consolationTitle       String        @default("Cupón Explorador Curioso - 15% OFF")
   minPingsForMajorPrize  Int           @default(3)
+  validationMode         String        @default("HYBRID") // QR_SCAN | PRESENTIAL_GPS | HYBRID
   status                 MissionStatus @default(ACTIVE)
   winnerHunterId         String?
   winnerAlias            String?

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Award, CheckCircle2, ExternalLink, QrCode, X } from "lucide-react";
+import { Award, CheckCircle2, ExternalLink, MapPin, QrCode, X } from "lucide-react";
 import type { Brand, Hunter, PublicBrand, RadarClaimResponse } from "@/types/radar";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
 
@@ -11,6 +11,7 @@ interface QrClaimModalProps {
   sessionToken: string;
   currentCoords: { lat: number; lng: number; accuracy: number } | null;
   suggestedCode?: string;
+  initialResult?: RadarClaimResponse | null;
   onClose: () => void;
   onClaimSuccess?: (res: RadarClaimResponse) => void;
 }
@@ -21,12 +22,13 @@ export function QrClaimModal({
   sessionToken,
   currentCoords,
   suggestedCode = "",
+  initialResult = null,
   onClose,
   onClaimSuccess,
 }: QrClaimModalProps) {
   const [tokenInput, setTokenInput] = useState(suggestedCode);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<RadarClaimResponse | null>(null);
+  const [result, setResult] = useState<RadarClaimResponse | null>(initialResult);
 
   const handleValidateQr = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,9 +180,21 @@ export function QrClaimModal({
                 : "CUPÓN EXPLORADOR CURIOSO"}
             </p>
 
-            <p className="text-xs text-slate-200 leading-relaxed">
+            <p className="text-xs text-slate-200 leading-relaxed font-semibold">
               {result.message}
             </p>
+
+            {result.claim?.claimMethod === "PRESENTIAL_GPS" && (
+              <div className="p-3 rounded-lg bg-emerald-950/80 border border-emerald-400/70 text-emerald-200 text-xs space-y-1 text-left">
+                <p className="font-bold flex items-center gap-1.5 text-emerald-300">
+                  <MapPin className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <span>Equipo de Marketing en el Lugar:</span>
+                </p>
+                <p className="text-[11px] text-emerald-100 leading-normal">
+                  ¡Mostrale esta pantalla o tu código de canje al equipo de {brand.name} para filmar la entrega oficial y recibir tu premio en mano!
+                </p>
+              </div>
+            )}
 
             {result.claim && (
               <div className="p-3 rounded-lg bg-[#0b0518] border border-amber-400/50 space-y-1">

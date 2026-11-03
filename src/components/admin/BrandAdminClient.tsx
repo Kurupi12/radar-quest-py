@@ -29,6 +29,7 @@ import {
   Smartphone,
   Trophy,
   Users,
+  Zap,
 } from "lucide-react";
 import type {
   BrandAnalyticsSummary,
@@ -39,6 +40,7 @@ import type {
   MissionClaim,
   PublicBrand,
   ReusableQrNode,
+  ValidationMode,
 } from "@/types/radar";
 import {
   extractCoordinatesFromInput,
@@ -157,6 +159,7 @@ export function BrandAdminClient({
   );
   const [selectedNodeCode, setSelectedNodeCode] = useState("");
   const [minPings, setMinPings] = useState(3);
+  const [validationMode, setValidationMode] = useState<ValidationMode>("HYBRID");
   const [savingMission, setSavingMission] = useState(false);
   const [builderFeedback, setBuilderFeedback] = useState<string | null>(null);
 
@@ -339,6 +342,7 @@ export function BrandAdminClient({
           consolationTitle,
           nodeCode: selectedNodeCode || null,
           minPingsForMajorPrize: minPings,
+          validationMode,
         }),
       });
       const data = await res.json();
@@ -1179,6 +1183,67 @@ export function BrandAdminClient({
                     onChange={(e) => setConsolationTitle(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg bg-[#0b0518] border border-slate-700 text-sm text-white"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] uppercase text-slate-400 mb-1.5 font-bold">
+                    Modo de Validación del Ganador
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setValidationMode("HYBRID")}
+                      className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col gap-1 ${
+                        validationMode === "HYBRID"
+                          ? "bg-purple-950/80 border-cyan-400 text-white shadow-[0_0_12px_rgba(0,240,255,0.25)]"
+                          : "bg-[#0b0518] border-slate-700 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-cyan-300">
+                        <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Híbrido (Recomendado)</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-tight">
+                        Llegar al punto exacto o escanear el QR físico.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setValidationMode("PRESENTIAL_GPS")}
+                      className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col gap-1 ${
+                        validationMode === "PRESENTIAL_GPS"
+                          ? "bg-purple-950/80 border-amber-400 text-white shadow-[0_0_12px_rgba(251,191,36,0.25)]"
+                          : "bg-[#0b0518] border-slate-700 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-amber-300">
+                        <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Encuentro Marketing</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-tight">
+                        Llegar a &lt;25m para filmar entrega en vivo con equipo de marketing.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setValidationMode("QR_SCAN")}
+                      className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col gap-1 ${
+                        validationMode === "QR_SCAN"
+                          ? "bg-purple-950/80 border-purple-400 text-white shadow-[0_0_12px_rgba(168,85,247,0.25)]"
+                          : "bg-[#0b0518] border-slate-700 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-purple-300">
+                        <QrCode className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Código QR Oculto</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-tight">
+                        Encontrar y escanear sticker físico con cámara.
+                      </p>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 font-mono text-xs bg-[#0b0518] p-3 rounded-lg border border-purple-500/30">

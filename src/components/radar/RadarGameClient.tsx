@@ -28,6 +28,7 @@ import type {
   Hunter,
   PublicBrand,
   PublicMission,
+  RadarClaimResponse,
   RadarPingResponse,
   ThermalState,
 } from "@/types/radar";
@@ -59,7 +60,10 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return outputArray;
 }
 
-function getThermalBadgeStyle(state: ThermalState): {
+function getThermalBadgeStyle(
+  state: ThermalState,
+  validationMode?: string
+): {
   bg: string;
   border: string;
   text: string;
@@ -67,11 +71,17 @@ function getThermalBadgeStyle(state: ThermalState): {
 } {
   switch (state) {
     case "QUEMANDO":
+      let quemandoLabel = "¡QUEMANDO! (<30M) ¡RECLAMÁ TU PREMIO!";
+      if (validationMode === "PRESENTIAL_GPS") {
+        quemandoLabel = "¡QUEMANDO! (<30M) ¡ENCONTRÁ AL EQUIPO!";
+      } else if (validationMode === "QR_SCAN") {
+        quemandoLabel = "¡QUEMANDO! (<30M) ¡ESCANEÁ EL QR!";
+      }
       return {
         bg: "rgba(220, 38, 38, 0.92)",
         border: "#fde047",
         text: "#fef08a",
-        label: "¡QUEMANDO! (<30M) ¡ESCANEÁ EL QR!",
+        label: quemandoLabel,
       };
     case "CALIENTE":
       return {
@@ -190,6 +200,12 @@ export function RadarGameClient({
   );
   // Phase 2 In-App Retro-Arcade Camera Scanner (enabled ONLY in QUEMANDO & <20 km/h)
   const [showInAppScanner, setShowInAppScanner] = useState(false);
+
+  // Presential GPS Victory Mode state (Marketing team waiting on-site)
+  const [showPresentialModal, setShowPresentialModal] = useState(false);
+  const [presentialClaiming, setPresentialClaiming] = useState(false);
+  const [presentialClaimResult, setPresentialClaimResult] =
+    useState<RadarClaimResponse | null>(null);
 
   const mapCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -479,15 +495,102 @@ export function RadarGameClient({
 
   const currentThermal: ThermalState =
     pingData?.thermalState || "FUERA DE ZONA";
-  const thermalStyle = getThermalBadgeStyle(currentThermal);
-
-  // Strict Phase 2 Rule: Enable QR Scanner ONLY when thermalState === 'QUEMANDO' (<30m and speed <20 km/h)
-  const canOpenScanner = Boolean(
-    pingData?.canOpenQrScanner ??
-      (currentThermal === "QUEMANDO" &&
-        !pingData?.inVehicleMode &&
-        (pingData?.speedKmh ?? 0) < 20)
+  const missionValidationMode =
+    selectedMission?.validationMode || pingData?.validationMode || "HYBRID";
+  const thermalStyle = getThermalBadgeStyle(
+    currentThermal,
+    missionValidationMode
   );
+
+  // Strict Phase 2 Rule: Enable QR Scanner ONLY when thermalState === 'QUEMANDO' (<30m and speed <20 km/h) AND mode !== "PRESENTIAL_GPS"
+  const canOpenScanner = Boolean(
+    missionValidationMode !== "PRESENTIAL_GPS" &&
+      (pingData?.canOpenQrScanner ??
+        (currentThermal === "QUEMANDO" &&
+          !pingData?.inVehicleMode &&
+          (pingData?.speedKmh ?? 0) < 20))
+  );
+
+  // Presential Mode: Enable GPS Claim button when in QUEMANDO (<30m, speed <20km/h) AND mode !== "QR_SCAN"
+  const canClaimPresential = Boolean(
+    missionValidationMode !== "QR_SCAN" &&
+      (pingData?.canClaimPresential ??
+        (currentThermal === "QUEMANDO" &&
+          !pingData?.inVehicleMode &&
+          (pingData?.speedKmh ?? 0) < 20 &&
+          selectedMission?.status === "ACTIVE"))
+  );
+
+  const handlePresentialClaim = async () => {
+    if (!hunter || !selectedMission || presentialClaiming) return;
+    setPresentialClaiming(true);
+
+    try {
+      let activeCoords = coords;
+      if (
+        gpsMode === "real" &&
+        typeof navigator !== "undefined" &&
+        navigator.geolocation
+      ) {
+        activeCoords = await new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) =>
+              resolve({
+                lat: Number(pos.coords.latitude.toFixed(6)),
+                lng: Number(pos.coords.longitude.toFixed(6)),
+                accuracy: Math.round(pos.coords.accuracy || 10),
+              }),
+            () => resolve(coords),
+            { enableHighAccuracy: true, timeout: 5000 }
+          );
+        });
+      }
+
+      const res = await fetch("/api/radar/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          claimMethod: "PRESENTIAL_GPS",
+          tokenOrNodeCode: "PRESENTIAL_GPS",
+          missionId: selectedMission.id,
+          brandSlug: brand.slug,
+          lat: activeCoords.lat,
+          lng: activeCoords.lng,
+          accuracy: activeCoords.accuracy,
+          hunterId: hunter.id,
+          alias: hunter.alias,
+          sessionToken,
+        }),
+      });
+
+      const data = (await res.json()) as RadarClaimResponse;
+      if (data.ok) {
+        arcadeHardware.playVictoryFanfare();
+        setMissions((prev) =>
+          prev.map((m) =>
+            m.id === selectedMission.id
+              ? {
+                  ...m,
+                  status: "CAPTURED",
+                  winnerAlias: hunter.alias,
+                }
+              : m
+          )
+        );
+      }
+      setPresentialClaimResult(data);
+      setShowPresentialModal(true);
+    } catch {
+      setPresentialClaimResult({
+        ok: false,
+        message:
+          "Error de conexión al registrar tu llegada. Por favor reintentá.",
+      });
+      setShowPresentialModal(true);
+    } finally {
+      setPresentialClaiming(false);
+    }
+  };
 
   return (
     <div
@@ -812,27 +915,58 @@ export function RadarGameClient({
                   </button>
                 )}
 
-                {/* PHASE 2 IN-APP CAMERA SCANNER: Interactive ONLY when QUEMANDO (<30m & <20 km/h) */}
-                {canOpenScanner ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowInAppScanner(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-extrabold text-xs uppercase text-slate-950 bg-amber-300 hover:bg-amber-200 border-2 border-white shadow-[0_0_18px_rgba(253,224,71,0.85)] animate-pulse active:scale-95 transition cursor-pointer"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>ESCANEAR QR</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled
-                    className="flex items-center gap-1 px-2.5 py-2 rounded-lg font-bold text-[10px] uppercase bg-slate-900/90 border border-slate-700 text-slate-500 cursor-not-allowed select-none"
-                    title="Se habilita únicamente en estado ¡QUEMANDO! (<30m y a pie <20 km/h)"
-                  >
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>ESCANEAR (&lt;30M)</span>
-                  </button>
-                )}
+                {/* PRESENTIAL GPS CLAIM BUTTON (When PRESENTIAL_GPS or HYBRID) */}
+                {missionValidationMode !== "QR_SCAN" &&
+                  (canClaimPresential ? (
+                    <button
+                      type="button"
+                      onClick={handlePresentialClaim}
+                      disabled={presentialClaiming}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-extrabold text-xs uppercase text-slate-950 bg-emerald-400 hover:bg-emerald-300 border-2 border-white shadow-[0_0_18px_rgba(52,211,153,0.85)] animate-pulse active:scale-95 transition cursor-pointer"
+                    >
+                      <MapPin className="w-4 h-4" />
+                      <span>
+                        {presentialClaiming
+                          ? "REGISTRANDO..."
+                          : "¡LLEGUÉ AL PUNTO!"}
+                      </span>
+                    </button>
+                  ) : (
+                    missionValidationMode === "PRESENTIAL_GPS" && (
+                      <button
+                        type="button"
+                        disabled
+                        className="flex items-center gap-1 px-2.5 py-2 rounded-lg font-bold text-[10px] uppercase bg-slate-900/90 border border-slate-700 text-slate-500 cursor-not-allowed select-none"
+                        title="Se habilita al llegar al punto secreto (<30m a pie)"
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>LLEGAR AL PUNTO (&lt;30M)</span>
+                      </button>
+                    )
+                  ))}
+
+                {/* PHASE 2 IN-APP CAMERA SCANNER: Interactive ONLY when QUEMANDO (<30m & <20 km/h) AND not pure PRESENTIAL */}
+                {missionValidationMode !== "PRESENTIAL_GPS" &&
+                  (canOpenScanner ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowInAppScanner(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-extrabold text-xs uppercase text-slate-950 bg-amber-300 hover:bg-amber-200 border-2 border-white shadow-[0_0_18px_rgba(253,224,71,0.85)] animate-pulse active:scale-95 transition cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>ESCANEAR QR</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="flex items-center gap-1 px-2.5 py-2 rounded-lg font-bold text-[10px] uppercase bg-slate-900/90 border border-slate-700 text-slate-500 cursor-not-allowed select-none"
+                      title="Se habilita únicamente en estado ¡QUEMANDO! (<30m y a pie <20 km/h)"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>ESCANEAR (&lt;30M)</span>
+                    </button>
+                  ))}
               </div>
             </div>
           </footer>
@@ -873,6 +1007,18 @@ export function RadarGameClient({
                   );
                 }
               }}
+            />
+          )}
+
+          {/* PRESENTIAL GPS CLAIM VICTORY MODAL */}
+          {showPresentialModal && hunter && (
+            <QrClaimModal
+              brand={brand}
+              hunter={hunter}
+              sessionToken={sessionToken}
+              currentCoords={coords}
+              initialResult={presentialClaimResult}
+              onClose={() => setShowPresentialModal(false)}
             />
           )}
 

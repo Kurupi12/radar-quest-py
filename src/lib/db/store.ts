@@ -31,6 +31,7 @@ import type {
   PushSubscriptionRecord,
   ReusableQrNode,
   ThermalState,
+  ValidationMode,
 } from "@/types/radar";
 import { computePublicZoneCenter } from "@/lib/radar/geo";
 import {
@@ -89,6 +90,7 @@ export function mapPrismaMission(m: PrismaMission): Mission {
     prizeTitle: m.prizeTitle,
     consolationTitle: m.consolationTitle,
     minPingsForMajorPrize: m.minPingsForMajorPrize,
+    validationMode: ((m as any).validationMode as ValidationMode) || "HYBRID",
     status: m.status,
     winnerHunterId: m.winnerHunterId,
     winnerAlias: m.winnerAlias,
@@ -270,6 +272,7 @@ export function toPublicMission(mission: Mission): PublicMission {
     prizeTitle: mission.prizeTitle,
     consolationTitle: mission.consolationTitle,
     minPingsForMajorPrize: mission.minPingsForMajorPrize,
+    validationMode: mission.validationMode || "HYBRID",
     status: mission.status,
     winnerAlias: mission.winnerAlias,
     capturedAt: mission.capturedAt,
@@ -371,6 +374,7 @@ function buildInitialSeed(): DatabaseSchema {
       prizeTitle: "Pod Edición Limitada 15K Puffs + Hoodie El Vape Club",
       consolationTitle: "Cupón Explorador Curioso: 20% OFF en tienda",
       minPingsForMajorPrize: 3,
+      validationMode: "HYBRID",
       status: "ACTIVE",
       winnerHunterId: null,
       winnerAlias: null,
@@ -397,6 +401,7 @@ function buildInitialSeed(): DatabaseSchema {
       prizeTitle: "Kit VIP Vape Club + Mystery Box Neón",
       consolationTitle: "Cupón Explorador Curioso: 15% OFF en recargas",
       minPingsForMajorPrize: 3,
+      validationMode: "HYBRID",
       status: "ACTIVE",
       winnerHunterId: null,
       winnerAlias: null,
@@ -423,6 +428,7 @@ function buildInitialSeed(): DatabaseSchema {
       prizeTitle: "Combo Dual Device + Acceso VIP Lanzamiento Asunción",
       consolationTitle: "Cupón Explorador Curioso: 20% OFF Sucursal Centro",
       minPingsForMajorPrize: 3,
+      validationMode: "HYBRID",
       status: "ACTIVE",
       winnerHunterId: null,
       winnerAlias: null,
@@ -449,6 +455,7 @@ function buildInitialSeed(): DatabaseSchema {
       prizeTitle: "Pack Aniversario El Vape Club + Gift Card Gs. 500.000",
       consolationTitle: "Cupón Explorador Curioso: 15% OFF Villa Morra",
       minPingsForMajorPrize: 3,
+      validationMode: "HYBRID",
       status: "ACTIVE",
       winnerHunterId: null,
       winnerAlias: null,
@@ -475,6 +482,7 @@ function buildInitialSeed(): DatabaseSchema {
       prizeTitle: "1 Mes de Smash Burgers Gratis + Gorra Pixel Art",
       consolationTitle: "Cupón Explorador Curioso: Papas Cheddar Gratis",
       minPingsForMajorPrize: 3,
+      validationMode: "HYBRID",
       status: "ACTIVE",
       winnerHunterId: null,
       winnerAlias: null,
@@ -501,6 +509,7 @@ function buildInitialSeed(): DatabaseSchema {
       prizeTitle: "Vape Kit Pro + Gorra Bordada Oficial",
       consolationTitle: "Cupón Explorador Curioso: 15% OFF",
       minPingsForMajorPrize: 3,
+      validationMode: "HYBRID",
       status: "CAPTURED",
       winnerHunterId: "hnt_demo_nico",
       winnerAlias: "@nico_itapua",
@@ -1137,6 +1146,7 @@ export async function createMissionRecord(params: {
   prizeTitle: string;
   consolationTitle: string;
   minPingsForMajorPrize: number;
+  validationMode?: ValidationMode;
 }): Promise<{ mission: Mission; remainingCredits: number }> {
   const missionId = `msn_${crypto.randomUUID().slice(0, 10)}`;
   const qrToken = `${params.brand.slug
@@ -1195,6 +1205,7 @@ export async function createMissionRecord(params: {
           prizeTitle: params.prizeTitle,
           consolationTitle: params.consolationTitle,
           minPingsForMajorPrize: params.minPingsForMajorPrize,
+          validationMode: params.validationMode || "HYBRID",
           status: "ACTIVE",
         },
       });
@@ -1239,6 +1250,7 @@ export async function createMissionRecord(params: {
     prizeTitle: params.prizeTitle,
     consolationTitle: params.consolationTitle,
     minPingsForMajorPrize: params.minPingsForMajorPrize,
+    validationMode: params.validationMode || "HYBRID",
     status: "ACTIVE",
     winnerHunterId: null,
     winnerAlias: null,

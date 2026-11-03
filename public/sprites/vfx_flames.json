@@ -1,0 +1,51 @@
+{
+  "usage": {
+    "type": "generations",
+    "generations": 1
+  },
+  "id": "295e8d4a-d9ee-4ef0-98bf-3879fc7bdbe3",
+  "status": "completed",
+  "created_at": "2026-11-03T03:31:38.295996+00:00",
+  "last_response": {
+    "fps": 12,
+    "kind": "new",
+    "loop": true,
+    "name": "thermal_neon_flames",
+    "files": {
+      "thermal-neon-flames.gif": "https://api.pixellab.ai/mcp/pixel-tools/beddd476-67fd-4e55-9216-e8a019e343cc/thermal-neon-flames.gif",
+      "thermal-neon-flames.png": "https://api.pixellab.ai/mcp/pixel-tools/beddd476-67fd-4e55-9216-e8a019e343cc/thermal-neon-flames.png",
+      "thermal-neon-flames.json": "https://api.pixellab.ai/mcp/pixel-tools/beddd476-67fd-4e55-9216-e8a019e343cc/thermal-neon-flames.json",
+      "thermal-neon-flames-game.zip": "https://api.pixellab.ai/mcp/pixel-tools/beddd476-67fd-4e55-9216-e8a019e343cc/thermal-neon-flames-game.zip"
+    },
+    "parts": [
+      "aura_flames"
+    ],
+    "anchor": {
+      "x": 34,
+      "y": 88,
+      "kind": "origin"
+    },
+    "artist": "lite",
+    "canvas": {
+      "h": 103,
+      "w": 68
+    },
+    "frames": 8,
+    "message": "Here's a looping 16-bit style fire aura: rising orange, magenta and yellow flame tongues from a glowing base, 8 frames at 12 fps, with a 4-colour ramp, hard pixel edges and no dithering. The sparks are small and faint at 1x, so raise the colour amount or the height slider if you want them to pop more. The background is transparent, and the flame colours can be changed with the colour control.",
+    "edit_url": "https://pixellab.ai/create-vfx?effect=ffc8b633-0c12-4120-bef6-c30fad0b9b01",
+    "effect_id": "ffc8b633-0c12-4120-bef6-c30fad0b9b01",
+    "gif_exact": true,
+    "result_id": "beddd476-67fd-4e55-9216-e8a019e343cc",
+    "conversation": "qq0ZxMax_UH0V_xaIFJ7Tw.13881a3e7a20dec14ece730e5b4905a9440567a69cc30ccab1961d3c51860cf7",
+    "billing_usage": {
+      "usd": 0,
+      "type": "generations",
+      "generations": 1
+    },
+    "generation_id": "1869a357-e5f2-49fb-8761-0e5f2452f905",
+    "billing_charged": true,
+    "generation_mode": "vfx",
+    "pixel_tools_image": true,
+    "quoted_generations": 1
+  }
+}

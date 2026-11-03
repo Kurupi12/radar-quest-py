@@ -123,6 +123,7 @@ export async function POST(request: Request) {
         1,
         Number(body.minPingsForMajorPrize || 3)
       ),
+      validationMode: (body.validationMode === "QR_SCAN" || body.validationMode === "PRESENTIAL_GPS") ? body.validationMode : "HYBRID",
     });
 
     if (created.mission.status === "ACTIVE") {

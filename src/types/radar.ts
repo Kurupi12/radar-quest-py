@@ -3,6 +3,7 @@
 // ============================================================================
 
 export type MissionStatus = "DRAFT" | "ACTIVE" | "CAPTURED" | "PAUSED";
+export type ValidationMode = "QR_SCAN" | "PRESENTIAL_GPS" | "HYBRID";
 
 export type ThermalState =
   | "FUERA DE ZONA"
@@ -77,6 +78,7 @@ export interface Mission {
   prizeTitle: string;
   consolationTitle: string;
   minPingsForMajorPrize: number;
+  validationMode: ValidationMode;
   status: MissionStatus;
   winnerHunterId: string | null;
   winnerAlias: string | null;
@@ -101,6 +103,7 @@ export interface PublicMission {
   prizeTitle: string;
   consolationTitle: string;
   minPingsForMajorPrize: number;
+  validationMode: ValidationMode;
   status: MissionStatus;
   winnerAlias: string | null;
   capturedAt: string | null;
@@ -196,6 +199,7 @@ export interface MissionClaim {
   alias: string;
   whatsapp: string;
   claimType: ClaimType;
+  claimMethod?: "QR_SCAN" | "PRESENTIAL_GPS";
   couponCode: string;
   prizeLabel: string;
   distanceAtClaimMeters: number;
@@ -283,6 +287,8 @@ export interface RadarPingResponse {
   };
   /** True only when thermalState === 'QUEMANDO' (<30m) and walking (<20 km/h) */
   canOpenQrScanner: boolean;
+  canClaimPresential: boolean;
+  validationMode: ValidationMode;
   missionStatus: MissionStatus;
   winnerAlias: string | null;
   serverTimestamp: string;
@@ -290,6 +296,7 @@ export interface RadarPingResponse {
 
 export interface RadarClaimRequest {
   tokenOrNodeCode: string;
+  claimMethod?: "QR_SCAN" | "PRESENTIAL_GPS";
   brandSlug: string;
   missionId?: string;
   lat: number;

@@ -67,12 +67,16 @@ function buildWhatsappRedeemUrl(
   alias: string,
   couponCode: string,
   claimType: ClaimType,
-  prizeLabel: string
+  prizeLabel: string,
+  claimMethod?: "QR_SCAN" | "PRESENTIAL_GPS"
 ): string {
   const cleanPhone = brand.whatsapp.replace(/[^\d]/g, "");
+  const isPresential = claimMethod === "PRESENTIAL_GPS";
   const header =
     claimType === "MAJOR_PRIZE"
-      ? `🏆 ¡CAPTURÉ EL TESORO DE ${brand.name.toUpperCase()} EN RADAR QUEST!`
+      ? isPresential
+        ? `🏆 ¡LLEGUÉ AL PUNTO DE ${brand.name.toUpperCase()} (ENCUENTRO MARKETING)!`
+        : `🏆 ¡CAPTURÉ EL TESORO DE ${brand.name.toUpperCase()} EN RADAR QUEST!`
       : `🕹️ ¡ESCANÉE UN NODO DE ${brand.name.toUpperCase()} EN RADAR QUEST!`;
 
   const text = [
@@ -81,7 +85,9 @@ function buildWhatsappRedeemUrl(
     `• Misión: ${mission.title} (${mission.city})`,
     `• Cupón Verificado: *${couponCode}*`,
     `• Beneficio: ${prizeLabel}`,
-    `Quiero validar mi premio ahora.`,
+    isPresential
+      ? `¡Estoy acá en el lugar del drop con el equipo de marketing para la entrega oficial y el video!`
+      : `Quiero validar mi premio ahora.`,
   ].join("\n");
 
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
@@ -380,8 +386,16 @@ export async function processRadarPing(
         };
 
   // Strict Phase 2 rule: In-app scanner unlocked ONLY in QUEMANDO (<30m) and walking (<20 km/h)
-  const canOpenQrScanner =
+  const validationMode = mission.validationMode || "HYBRID";
+  const isCloseEnough =
     thermalState === "QUEMANDO" && !inVehicleMode && roundedSpeed < 20;
+
+  const canOpenQrScanner =
+    isCloseEnough &&
+    (validationMode === "QR_SCAN" || validationMode === "HYBRID");
+  const canClaimPresential =
+    isCloseEnough &&
+    (validationMode === "PRESENTIAL_GPS" || validationMode === "HYBRID");
 
   return {
     ok: true,
@@ -399,6 +413,8 @@ export async function processRadarPing(
       ready: validHuntPings >= mission.minPingsForMajorPrize,
     },
     canOpenQrScanner,
+    canClaimPresential,
+    validationMode,
     missionStatus: mission.status,
     winnerAlias: mission.winnerAlias,
     serverTimestamp: nowIso,
@@ -424,9 +440,38 @@ export async function processRadarClaim(
     };
   }
 
-  // Resolve Mission by Token or Reusable Node
+  const isPresential =
+    input.claimMethod === "PRESENTIAL_GPS" ||
+    code.toUpperCase() === "PRESENTIAL_GPS" ||
+    code.startsWith("PRESENTIAL_");
+
+  // Resolve Mission by Token, Reusable Node, or Presential GPS check-in
   let mission: Mission | null = null;
-  if (isCloudDbEnabled()) {
+  if (isPresential) {
+    if (input.missionId) {
+      mission = await findMissionById(input.missionId);
+    }
+    if (!mission && isCloudDbEnabled()) {
+      const active = await getPrisma().mission.findFirst({
+        where: { brandId: brand.id, status: "ACTIVE" },
+      });
+      if (active) mission = mapPrismaMission(active);
+    } else if (!mission) {
+      mission =
+        getDb().missions.find(
+          (m) => m.brandId === brand.id && m.status === "ACTIVE"
+        ) || null;
+    }
+
+    if (mission && mission.validationMode === "QR_SCAN") {
+      return {
+        ok: false,
+        errorCode: "INVALID_TOKEN",
+        message:
+          "Esta misión requiere escanear el cartel o código QR físico con la cámara.",
+      };
+    }
+  } else if (isCloudDbEnabled()) {
     const prisma = getPrisma();
     const direct = await prisma.mission.findFirst({
       where: {
@@ -622,7 +667,9 @@ export async function processRadarClaim(
           claimType = "MAJOR_PRIZE";
           couponCode = tryCoupon;
           prizeLabel = mission.prizeTitle;
-          userMessage = `¡TESORO CAPTURADO! Fuiste el primer cazador verificado en encontrar "${mission.title}".`;
+          userMessage = isPresential
+            ? `¡LLEGASTE PRIMERO! Fuiste el primer cazador en llegar a "${mission.title}". ¡Acercate al equipo de marketing de ${brand.name} para recibir tu premio y filmar la entrega oficial!`
+            : `¡TESORO CAPTURADO! Fuiste el primer cazador verificado en encontrar "${mission.title}".`;
         } else {
           const freshMsn = await tx.mission.findUnique({
             where: { id: mission.id },
@@ -681,7 +728,8 @@ export async function processRadarClaim(
         hunter.alias,
         couponCode,
         claimType,
-        prizeLabel
+        prizeLabel,
+        input.claimMethod
       );
 
       const createdClaim = await tx.claim.create({
@@ -702,10 +750,13 @@ export async function processRadarClaim(
         },
       });
 
+      const mappedClaim = mapPrismaClaim(createdClaim);
+      mappedClaim.claimMethod = input.claimMethod || "QR_SCAN";
+
       return {
         ok: true,
         message: userMessage,
-        claim: mapPrismaClaim(createdClaim),
+        claim: mappedClaim,
         missionTitle: mission.title,
         brandName: brand.name,
       };
@@ -759,7 +810,9 @@ export async function processRadarClaim(
     claimType = "MAJOR_PRIZE";
     couponCode = `${prefix}-WIN-${randomSuffix}`;
     prizeLabel = dbMission.prizeTitle;
-    userMessage = `¡TESORO CAPTURADO! Fuiste el primer cazador verificado en encontrar "${dbMission.title}".`;
+    userMessage = isPresential
+      ? `¡LLEGASTE PRIMERO! Fuiste el primer cazador en llegar a "${dbMission.title}". ¡Acercate al equipo de marketing de ${brand.name} para recibir tu premio y filmar la entrega oficial!`
+      : `¡TESORO CAPTURADO! Fuiste el primer cazador verificado en encontrar "${dbMission.title}".`;
 
     dbMission.status = "CAPTURED";
     dbMission.winnerHunterId = hunter.id;
@@ -804,7 +857,8 @@ export async function processRadarClaim(
     hunter.alias,
     couponCode,
     claimType,
-    prizeLabel
+    prizeLabel,
+    input.claimMethod
   );
 
   const claim: MissionClaim = {
@@ -815,6 +869,7 @@ export async function processRadarClaim(
     alias: hunter.alias,
     whatsapp: hunter.whatsapp,
     claimType,
+    claimMethod: input.claimMethod || "QR_SCAN",
     couponCode,
     prizeLabel,
     distanceAtClaimMeters: Number(distanceMeters.toFixed(1)),
