@@ -207,6 +207,7 @@ export function RadarCanvasOverlay({
   onCanvasReady,
 }: RadarCanvasOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const walkImagesRef = useRef<HTMLImageElement[]>([]);
   const stateRef = useRef({
     thermalState,
     inVehicleMode,
@@ -214,6 +215,17 @@ export function RadarCanvasOverlay({
     primaryColor,
     secondaryColor,
   });
+
+  // Preload PixelLab walk animation frames (frame_0.png to frame_8.png)
+  useEffect(() => {
+    const images: HTMLImageElement[] = [];
+    for (let i = 0; i < 9; i++) {
+      const img = new Image();
+      img.src = `/sprites/walk_south/frame_${i}.png`;
+      images.push(img);
+    }
+    walkImagesRef.current = images;
+  }, []);
 
   stateRef.current = {
     thermalState,
@@ -327,17 +339,38 @@ export function RadarCanvasOverlay({
       }
       ctx.globalAlpha = 1;
 
-      // 4. Draw 16-bit Hunter Sprite
-      const spriteFrame = Math.floor(tick / 18);
-      drawHunterSprite16Bit(
-        ctx,
-        cx,
-        cy,
-        spriteFrame,
-        vehicle,
-        sColor,
-        pColor
-      );
+      // 4. Draw 16-bit Hunter Sprite (PixelLab Walk Animation or Cyber Car)
+      const walkImages = walkImagesRef.current;
+      const currentWalkIdx = Math.floor(tick / 6) % 9;
+      const walkImg = walkImages[currentWalkIdx];
+
+      if (!vehicle && walkImg && walkImg.complete && walkImg.naturalWidth > 0) {
+        const drawSize = 46;
+        // Ground shadow
+        ctx.fillStyle = "rgba(10, 4, 24, 0.72)";
+        ctx.fillRect(cx - 11, cy + 13, 22, 5);
+
+        // Render PixelLab 16-bit animated hunter
+        ctx.drawImage(
+          walkImg,
+          Math.round(cx - drawSize / 2),
+          Math.round(cy - drawSize / 2 - 1),
+          drawSize,
+          drawSize
+        );
+      } else {
+        // Fallback procedural sprite or cyber vehicle
+        const spriteFrame = Math.floor(tick / 18);
+        drawHunterSprite16Bit(
+          ctx,
+          cx,
+          cy,
+          spriteFrame,
+          vehicle,
+          sColor,
+          pColor
+        );
+      }
 
       // 5. Rival Danger Red Strobe Border on Canvas
       if (danger && Math.floor(tick / 10) % 2 === 0) {
