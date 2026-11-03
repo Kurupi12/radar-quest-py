@@ -410,7 +410,7 @@ class ArcadeHardwareController {
     if (typeof window === "undefined" || this.muted) return;
     try {
       const audio = new Audio("/audio/sfx_freeze.mp3");
-      audio.volume = 0.55;
+      audio.volume = 0.3;
       audio.play().catch(() => {});
       this.vibrate([40, 30, 60]);
     } catch {
