@@ -21,6 +21,7 @@ interface RadarCanvasOverlayProps {
   dangerAlertActive: boolean;
   primaryColor?: string;
   secondaryColor?: string;
+  active?: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
 }
 
@@ -205,6 +206,7 @@ export function RadarCanvasOverlay({
   dangerAlertActive,
   primaryColor = "#a855f7",
   secondaryColor = "#00f0ff",
+  active = true,
   onCanvasReady,
 }: RadarCanvasOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -223,6 +225,7 @@ export function RadarCanvasOverlay({
     dangerAlertActive,
     primaryColor,
     secondaryColor,
+    active,
   });
 
   // Preload PixelLab walk & jump celebration animation frames & thermal flames spritesheet
@@ -254,6 +257,7 @@ export function RadarCanvasOverlay({
     dangerAlertActive,
     primaryColor,
     secondaryColor,
+    active,
   };
 
   useEffect(() => {
@@ -289,13 +293,16 @@ export function RadarCanvasOverlay({
         dangerAlertActive: danger,
         primaryColor: pColor,
         secondaryColor: sColor,
+        active: isOverlayActive,
       } = stateRef.current;
 
       const cx = LOGICAL_WIDTH / 2;
       const cy = LOGICAL_HEIGHT / 2;
 
       // Se considera estado frío tanto en CONGELADO como en FUERA DE ZONA (lejanía del tesoro)
+      // Sólo se activa si el overlay está activo (el jugador ya superó el preloader de inicio)
       const isCold =
+        Boolean(isOverlayActive) &&
         (currentThermal === "CONGELADO" || currentThermal === "FUERA DE ZONA") &&
         !vehicle;
 

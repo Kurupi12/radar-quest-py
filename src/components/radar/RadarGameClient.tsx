@@ -762,6 +762,7 @@ export function RadarGameClient({
             dangerAlertActive={Boolean(pingData?.dangerAlert?.active)}
             primaryColor={brand.primaryColor}
             secondaryColor={brand.secondaryColor}
+            active={preloaderDismissed}
             onCanvasReady={handleOverlayCanvasReady}
           />
 
