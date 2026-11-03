@@ -15,7 +15,7 @@
 
 El diseño resuelve un problema clásico de los *Location-Based Games* (como *Pokémon GO* o *Geocaching*): **cómo guiar a decenas de jugadores simultáneos hacia un punto secreto en el mundo físico sin revelar las coordenadas en el cliente web, manteniendo tensión competitiva en tiempo real y garantizando equidad frente a trampas de GPS o uso de vehículos.**
 
-En lugar de mostrar un marcador de destino tradicional, el jugador navega el entorno urbano guiándose únicamente por **telemetría térmica ("Frío / Caliente")**, ondas de sonar pixeladas, síntesis de audio chiptune paramétrica y vibración háptica progresiva hasta situarse a menos de 30 metros a pie del objetivo para reclamar la recompensa física o digital.
+En lugar de mostrar un marcador de destino tradicional, el jugador navega el entorno urbano guiándose únicamente por **telemetría térmica ("Frío / Caliente")**, **asistencia táctica de trayectoria cinemática en caminata**, ondas de sonar pixeladas, síntesis de audio chiptune paramétrica y vibración háptica progresiva hasta situarse a menos de 30 metros a pie del objetivo para reclamar la recompensa física o digital.
 
 ---
 
@@ -45,7 +45,7 @@ flowchart TD
     B --> C["Onboarding Táctico 3s (Alias + WhatsApp + Filtro +18)"]
     C --> D["Exploración Física en Ciudad Real (Ping Geodésico cada ~3s)"]
     D --> E{"Evaluación Server-Authoritative"}
-    E -->|"> 30m o en Vehículo"| F["Feedback Multimodal: Sonar Visual + Chiptune + Vibración"]
+    E -->|"> 30m o en Vehículo"| F["Feedback Multimodal: Sonar + Vector Táctico + Chiptune + Vibración"]
     F --> D
     E -->|"Rival a <= 65m"| G["Alerta Roja Crítica: Sirena + Estrobo en Pantalla"]
     G --> D
@@ -68,7 +68,23 @@ El servidor evalúa la distancia geodésica exacta mediante la fórmula de **Hav
 | **`QUEMANDO`** | **`< 30 m` y velocidad `< 20 km/h` (a pie)** | `98%` | Zona de captura alcanzada. El personaje salta celebrando entre llamas intensas y **se desbloquea el botón de captura**. |
 | **`TELEPORT_ANOMALY`** | Salto `> 500 m` en `<= 45 s` o `> 130 km/h` | `0%` | Penalización Anti-Spoofing activa. Bloquea el progreso de caza y cualquier intento de reclamo. |
 
-### 3.3. Modalidades de Victoria Versátiles (`ValidationMode`)
+### 3.3. Asistencia Táctica de Trayectoria (`TacticalVectorAssistance`)
+
+Mientras la escala térmica comunica proximidad radial estática, un jugador que permanece dentro de una banda amplia (por ejemplo, `TIBIO` entre `160 m` y `650 m`) necesita saber si su rumbo actual sobre la cuadrícula urbana lo acerca o lo aleja del objetivo sin que el servidor revele jamás una brújula exacta ni las coordenadas secretas. El módulo **`TacticalVectorAssistance`** (`src/lib/radar/tacticalVectorAssistance.ts`) resuelve esto analizando la cinemática real de caminata:
+
+* **Ventana Cinemática (`15 s` a `30 s`):** Evalúa en servidor los últimos pulsos válidos a pie (`HunterPing` indexados de los últimos `30 segundos`, velocidad `< 20 km/h`, sin banderas de anomalía, con respaldo `prevTelemetry` hasta `45 s`). Calcula el diferencial radial por paso y neto (`Δd = d_actual - d_anterior`), el recorrido físico acumulado sobre el suelo por Haversine (`groundPathMeters`) y la deriva respecto al punto más cercano alcanzado en la ventana reciente (`driftFromClosest = d_actual - minRecentDistance`).
+* **Filtro de Enfriamiento Anti-Spam (`Cooldown 10 s`) y Continuidad Serverless:** Para evitar parpadeos visuales ante fluctuaciones menores del GPS civil, el motor retiene la pista emitida durante `10.000 ms` (`TACTICAL_COOLDOWN_MS`), sincronizando una caché en memoria de instancia (`__rqTacticalCooldownCache`) con un snapshot cliente-servidor (`tacticalStateSnapshot`) resistente al balanceo entre múltiples lambdas en Vercel. El candado se libera de forma inmediata ante cambios de prioridad crítica (activar/salir de modo vehículo, anomalía de teletransporte o entrada a `QUEMANDO`).
+
+| Tendencia / Prioridad | Condición Cinemática en Ventana (`15–30 s`) | Mensajes Temáticos 16-Bits (`TacticalHint.message`) |
+| :--- | :--- | :--- |
+| **`CLOSING_IN`** *(Acercamiento)* | A pie (`< 20 km/h`) con reducción sostenida (`Δd_neto <= -6 m`, `Δd_paso <= 2.5 m` y mayoría de pasos positivos) o en rango `< 30 m`. | `SEÑAL EN AUMENTO: MANTÉN ESTA DIRECCIÓN` / `VECTOR ÓPTIMO: ACERCAMIENTO DIRECTO AL OBJETIVO` / `SEÑAL EN AUMENTO: OBJETIVO EN RANGO INMEDIATO (<30M)` |
+| **`DRIFTING_AWAY`** *(Desvío / Alejamiento)* | Deriva acumulada `>= 15 m` respecto al mínimo reciente sin recuperación inmediata (`15–24.9 m` moderado; `>= 25 m` severo). | `ALEJAMIENTO DETECTADO: CORRIGE RUMBO EN SENTIDO OPUESTO` / `DESVÍO DETECTADO: EL RASTRO QUEDÓ A TUS ESPALDAS` |
+| **`NEUTRAL`** *(Rumbo Paralelo / Búsqueda)* | Caminata lateral (`groundPathMeters >= 12 m` con `abs(Δd_neto) < 10 m` y deriva `< 15 m`), calibración inicial o transición suave. | `RUMBO PARALELO: BUSCA UN CRUCE DIRECTO` / `CALIBRANDO VECTOR: CAMINA A PIE PARA FIJAR RUMBO` / `EXPLORANDO SECTOR: MANTÉN CAMINATA CONSTANTE` |
+| **`STAGNANT`** *(Estancamiento)* | Ventana `>= 10 s` (o `>= 3` pings) con desplazamiento físico sobre el terreno `< 8 m` en esquina o cuadra. | `ESTANCAMIENTO EN ESQUINA: AVANZA UNA CUADRA PARA TRIANGULAR` |
+| **Override Vehicular** *(Prioridad 1)* | Velocidad `>= 20 km/h` (`inVehicleMode = true`); ignora el cooldown y sobrescribe instantáneamente la pista. | `MODO VEHÍCULO ACTIVO: ESTACIONA Y CONTINÚA A PIE PARA FIJAR RUMBO` |
+| **Override Anti-Spoof** *(Prioridad 2)* | Detección de salto imposible (`TELEPORT_ANOMALY`). | `ANOMALÍA DE TRAYECTORIA: CAMINA A PIE PARA RECALIBRAR RUMBO` |
+
+### 3.4. Modalidades de Victoria Versátiles (`ValidationMode`)
 
 Cada misión admite tres configuraciones tácticas definibles en vivo por el *Game Master* (administrador de marca):
 
@@ -76,7 +92,7 @@ Cada misión admite tres configuraciones tácticas definibles en vivo por el *Ga
 2. **`PRESENTIAL_GPS` (Encuentro en Vivo con Equipo de Marketing):** Pensado para eventos masivos y *drops* relámpago donde un equipo humano aguarda en el punto secreto. Al entrar en `¡QUEMANDO!`, se habilita el botón mecánico esmeralda **`¡LLEGUÉ AL PUNTO!`**, validando la victoria por precisión geodésica instantánea para filmar la entrega en vivo.
 3. **`HYBRID` (Modo Dual):** Habilita simultáneamente tanto la validación por proximidad GPS presencial como el escaneo óptico QR.
 
-### 3.4. Psicología de Recompensas y Sistema "Proof of Hunt" (Cero Frustración)
+### 3.5. Psicología de Recompensas y Sistema "Proof of Hunt" (Cero Frustración)
 
 Un riesgo crítico de diseño en las búsquedas del tesoro reales es la **frustración del segundo lugar** (caminar diez cuadras y que otro jugador capture el premio diez segundos antes) o el **robo casual** (un peatón ajeno al juego que ve un QR pegado en un poste y lo escanea por curiosidad). Radar Quest lo resuelve mediante una matriz de tres resultados transaccionales:
 
@@ -84,7 +100,7 @@ Un riesgo crítico de diseño en las búsquedas del tesoro reales es la **frustr
 * **Consuelo por Llegada Tardía (`CONSOLATION_LATE` — Código `MARCA-LATE-XXXXXX`):** Si la misión acaba de ser capturada por otro rival, todo cazador en ruta que llegue al punto recibe un **Cupón Oficial de Consuelo** (ej. *15% OFF / Beneficio directo*), recompensando su esfuerzo físico en el mundo real.
 * **Modo Explorador Curioso (`CONSOLATION_CURIOUS` — Código `MARCA-EXP-XXXXXX`):** Si un transeúnte escanea el QR físico en la calle con la cámara de su teléfono sin haber rastreado la misión en el radar (`validHuntPings < minPingsForMajorPrize`), el sistema le entrega un cupón de bienvenida y capta su registro, **pero mantiene el Premio Mayor intacto y oculto (`ACTIVE`)** para los cazadores legítimos que están compitiendo en el mapa.
 
-### 3.5. Tensión Multijugador en Tiempo Real ("Rival Danger Zone")
+### 3.6. Tensión Multijugador en Tiempo Real ("Rival Danger Zone")
 
 El motor cruza en cada pulso la telemetría de todos los jugadores activos en los últimos `90 segundos` (`ACTIVE_HUNTER_WINDOW_MS`). Si uno o más cazadores rivales ingresan a un radio crítico de **`<= 65 metros`** del tesoro (`DANGER_ZONE_METERS`), todos los jugadores reciben una **Alerta Roja de Peligro**: el borde del canvas parpadea con un estrobo carmesí a `3 Hz`, se dispara una sirena bitonal en onda diente de sierra y el HUD notifica cuántos rivales están pisando el área de captura, provocando un pico inmediato de adrenalina en los metros finales.
 
@@ -102,11 +118,11 @@ sequenceDiagram
 
     Note over C,S: Las coordenadas secretas NUNCA existen en el navegador
     C->>S: POST /api/radar/ping (lat, lng, accuracy, HMAC Cookie)
-    S->>DB: Lee Misión (secretLat, secretLng) + Telemetría Previa
-    S->>S: Calcula Haversine + Velocidad Cinemática (km/h)
+    S->>DB: Lee Misión (secretLat, secretLng) + Ventana HunterPing (30s)
+    S->>S: Calcula Haversine + Velocidad Cinemática (km/h) + Vector Táctico (Δd, Cooldown 10s)
     S->>S: Evalúa Anti-Teleport (>130 km/h o >500m/45s) & Modo Vehículo (>=20 km/h)
     S->>DB: Registra HunterPing + Incrementa validHuntPings + Cuenta Rivales (<=65m)
-    S-->>C: Devuelve SOLO ThermalState, Speed, DangerAlert y Permiso de Escáner
+    S-->>C: Devuelve SOLO ThermalState, TacticalHint, Speed, DangerAlert y Permiso QR
 
     Note over C,S: Jugador entra en ¡QUEMANDO! (<30m a pie) y escanea QR
     C->>S: POST /api/radar/claim (qrToken, lat, lng, accuracy, HMAC)
@@ -133,6 +149,7 @@ Toda la interfaz gráfica (HUD en vivo, preloader, modales de registro, escáner
 * **Paneles Achaflanados (`.rf-panel`):** Contenedores oscuros (`#090e1d`) recortados geométricamente a 45° en sus ocho vértices (`clip-path`), con biseles internos especulares y **cuatro tornillos metálicos (`.rf-screw`)** renderizados en las esquinas.
 * **Cintas de Precaución Industrial (`.rf-hazard-stripes`):** Franjas diagonales a `-45°` en combinaciones Ámbar/Acero, Cian/Noche y Carmesí/Sombra que señalizan jerarquía visual y estados de alerta.
 * **Botonera Mecánica 3D con Respuesta Física:** Cinco variantes cromáticas (`.rf-btn-gold`, `.rf-btn-cyan`, `.rf-btn-crimson`, `.rf-btn-emerald`, `.rf-btn-steel`) construidas con gradientes metálicos de cuatro etapas, sombra dura inferior de `3px` y compresión mecánica `translateY(3px)` al presionarlas.
+* **Consola de Lectura Vectorial (`TacticalVectorReadout` / `.rf-tactical-slot`):** Placa achaflanada integrada dentro de la tarjeta inferior `.rf-panel` del HUD vertical `9:16`. Encapsulada con `React.memo`, ejecuta un efecto de **tipeo progresivo (*typewriter* a `22 ms/carácter`)** con cursor pulsante y badge de diferencial métrico (`±XM`) sin provocar re-renders en el `<canvas>` a 60 FPS ni alterar la composición de `ViralRecorder`. Aplica código cromático semántico con iconos 100% SVG (`Navigation`, `AlertTriangle`, `Compass`, `Car`): Esmeralda Neón (`#10b981`, `.rf-tactical-closing`) con pulso suave (`2.3 s`) al acercarse, Carmesí (`#ef4444`, `.rf-tactical-drifting`) con parpadeo de precaución (`1.15 s`) al desviarse, y Ámbar Neón (`#f59e0b`, `.rf-tactical-neutral`) en rumbo paralelo, estancamiento o modo vehículo.
 * **Fidelidad Pixel-Art y Textura CRT:** Regla global `image-rendering: pixelated; crisp-edges;` sobre todos los lienzos y superposición `.crt-scanlines` de `4px` de paso que unifica mapa vectorial, sprites y tipografía.
 * **Política de Iconografía 100% Vectorial SVG:** Prohibición absoluta de emojis del sistema operativo en toda la interfaz visual; cada indicador térmico, emblema de marca, control de audio y pin de mapa se dibuja con vectores SVG puros para garantizar nitidez idéntica en cualquier dispositivo.
 
@@ -140,7 +157,7 @@ Toda la interfaz gráfica (HUD en vivo, preloader, modales de registro, escáner
 
 1. **`Handjet` (Display Modular Pixel/Sci-Fi):** Cabeceras, botonera 3D, placas remachadas (`YOU WON`, `SIGN IN`, `REWARDS :`) y alerta de impacto en peso ExtraBlack (`900`) para el estado **`¡QUEMANDO!`**.
 2. **`Press Start 2P` (8/16-Bit Arcade Puro):** Micro-etiquetas de gabinete, insignias de hardware y botón de arranque del preloader.
-3. **`VT323` (Terminal Fósforo Monoespaciada):** Lecturas de telemetría, porcentajes de carga y diagnósticos de sistema.
+3. **`VT323` (Terminal Fósforo Monoespaciada):** Lecturas de telemetría, consola typewriter de asistencia vectorial (`TacticalVectorReadout`), porcentajes de carga y diagnósticos de sistema.
 4. **`Space Grotesk` (Geométrica Técnica):** Cuerpos de texto, pistas narrativas y formularios de gestión LiveOps de lectura rápida bajo luz solar directa.
 
 ### 5.3. Reprogramación Cartográfica en Tiempo Real (`ArcadeMap`)
@@ -237,5 +254,5 @@ Protegido mediante PIN de 6 dígitos firmado, otorga a cada comercio o director 
 Panel exclusivo de **CeroUno Studio** para aprovisionamiento multi-tenant: alta y configuración estética de nuevas marcas clientes (paleta primaria/secundaria, iconografía SVG, restricción de edad `+18`, línea de WhatsApp de canje y PIN), monitoreo global y libro mayor auditable de transacciones de créditos (`CreditTransaction`).
 
 ### 9.3. Simulador de Telemetría para QA y Demostraciones Comerciales
-El HUD incorpora una consola de simulación para diseño de niveles y presentaciones en vivo que permite inyectar estados controlados (`CONGELADO`, `TIBIO`, `CALIENTE`, `QUEMANDO`, `VEHICLE`, `TELEPORT`) en escritorio o sala de reuniones, verificando toda la cadena audiovisual, háptica, anti-cheat y de escaneo sin requerir desplazamiento físico durante una demostración ante inversores o clientes.
+El HUD incorpora una consola de simulación para diseño de niveles y presentaciones en vivo que permite inyectar estados controlados (`CONGELADO`, `TIBIO`, `CALIENTE`, `QUEMANDO`, `VEHICLE`, `TELEPORT`) en escritorio o sala de reuniones, verificando toda la cadena audiovisual, háptica, pistas vectoriales (`TacticalHint`), anti-cheat y de escaneo sin requerir desplazamiento físico durante una demostración ante inversores o clientes.
 
