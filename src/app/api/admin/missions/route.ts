@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { hasBrandAdminAccess } from "@/lib/auth/adminAuth";
 import {
   createMissionRecord,
+  deleteMissionRecord,
   findBrandBySlug,
   findMissionById,
   getBrandAdminBundle,
@@ -203,6 +204,27 @@ export async function PATCH(request: Request) {
       city: body.city ? String(body.city).trim() : undefined,
       zoneHint: body.zoneHint ? String(body.zoneHint).trim() : undefined,
       prizeTitle: body.prizeTitle ? String(body.prizeTitle).trim() : undefined,
+      consolationTitle: body.consolationTitle
+        ? String(body.consolationTitle).trim()
+        : undefined,
+      minPingsForMajorPrize:
+        body.minPingsForMajorPrize !== undefined
+          ? Math.max(1, Number(body.minPingsForMajorPrize))
+          : undefined,
+      validationMode:
+        body.validationMode === "QR_SCAN" ||
+        body.validationMode === "PRESENTIAL_GPS" ||
+        body.validationMode === "HYBRID"
+          ? body.validationMode
+          : undefined,
+      captureRadiusMeters:
+        body.captureRadiusMeters !== undefined
+          ? Math.min(65, Math.max(20, Number(body.captureRadiusMeters)))
+          : undefined,
+      zoneRadiusMeters:
+        body.zoneRadiusMeters !== undefined
+          ? Math.max(500, Number(body.zoneRadiusMeters))
+          : undefined,
       status: body.status ? (String(body.status) as MissionStatus) : undefined,
       resetWinner: Boolean(body.resetWinner),
       nodeCode:
@@ -237,6 +259,97 @@ export async function PATCH(request: Request) {
         ok: false,
         message:
           err instanceof Error ? err.message : "Error actualizando misión.",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export const PUT = PATCH;
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    let missionId = searchParams.get("missionId");
+
+    if (!missionId) {
+      try {
+        const body = await request.json();
+        missionId = body?.missionId;
+      } catch {
+        // Ignorar si no hay body JSON
+      }
+    }
+
+    if (!missionId) {
+      return NextResponse.json(
+        { ok: false, message: "Parámetro missionId requerido." },
+        { status: 400 }
+      );
+    }
+
+    const existing = await findMissionById(missionId);
+    if (!existing) {
+      return NextResponse.json(
+        { ok: false, message: "Misión no encontrada." },
+        { status: 404 }
+      );
+    }
+
+    // Verificar permisos del comercio propietario
+    let ownerBrand: Brand | null = null;
+    if (isCloudDbEnabled()) {
+      const b = await getPrisma().brand.findUnique({
+        where: { id: existing.brandId },
+      });
+      if (b) ownerBrand = mapPrismaBrand(b);
+    } else {
+      ownerBrand =
+        getDb().brands.find((b) => b.id === existing.brandId) || null;
+    }
+
+    if (!ownerBrand) {
+      return NextResponse.json(
+        { ok: false, message: "Marca propietaria no encontrada." },
+        { status: 404 }
+      );
+    }
+
+    const access = await hasBrandAdminAccess(ownerBrand.slug);
+    if (!access.authorized) {
+      return NextResponse.json(
+        { ok: false, message: "No autorizado para eliminar esta misión." },
+        { status: 401 }
+      );
+    }
+
+    const result = await deleteMissionRecord({
+      missionId: existing.id,
+      brandId: ownerBrand.id,
+    });
+
+    if (!result.deleted) {
+      return NextResponse.json(
+        { ok: false, message: "No se pudo eliminar la misión." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      missionId: existing.id,
+      refundedCredit: result.refundedCredit,
+      remainingCredits: result.remainingCredits,
+      message: result.refundedCredit
+        ? `Misión eliminada correctamente. Se reembolsó 1 crédito de drop a tu saldo.`
+        : `Misión eliminada correctamente.`,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message:
+          err instanceof Error ? err.message : "Error al eliminar la misión.",
       },
       { status: 500 }
     );

@@ -1292,6 +1292,11 @@ export async function updateMissionRecord(params: {
   city?: string;
   zoneHint?: string;
   prizeTitle?: string;
+  consolationTitle?: string;
+  minPingsForMajorPrize?: number;
+  validationMode?: ValidationMode;
+  captureRadiusMeters?: number;
+  zoneRadiusMeters?: number;
   status?: MissionStatus;
   resetWinner?: boolean;
   nodeCode?: string | null;
@@ -1326,6 +1331,11 @@ export async function updateMissionRecord(params: {
         ...(params.city ? { city: params.city } : {}),
         ...(params.zoneHint ? { zoneHint: params.zoneHint } : {}),
         ...(params.prizeTitle ? { prizeTitle: params.prizeTitle } : {}),
+        ...(params.consolationTitle ? { consolationTitle: params.consolationTitle } : {}),
+        ...(params.minPingsForMajorPrize !== undefined ? { minPingsForMajorPrize: params.minPingsForMajorPrize } : {}),
+        ...(params.validationMode ? { validationMode: params.validationMode } : {}),
+        ...(params.captureRadiusMeters !== undefined ? { captureRadiusMeters: params.captureRadiusMeters } : {}),
+        ...(params.zoneRadiusMeters !== undefined ? { zoneRadiusMeters: params.zoneRadiusMeters } : {}),
         ...(params.status ? { status: params.status } : {}),
         ...(params.status === "ACTIVE" && params.resetWinner
           ? {
@@ -1369,6 +1379,17 @@ export async function updateMissionRecord(params: {
   if (params.city) mission.city = params.city;
   if (params.zoneHint) mission.zoneHint = params.zoneHint;
   if (params.prizeTitle) mission.prizeTitle = params.prizeTitle;
+  if (params.consolationTitle) mission.consolationTitle = params.consolationTitle;
+  if (params.minPingsForMajorPrize !== undefined) {
+    mission.minPingsForMajorPrize = params.minPingsForMajorPrize;
+  }
+  if (params.validationMode) mission.validationMode = params.validationMode;
+  if (params.captureRadiusMeters !== undefined) {
+    mission.captureRadiusMeters = params.captureRadiusMeters;
+  }
+  if (params.zoneRadiusMeters !== undefined) {
+    mission.zoneRadiusMeters = params.zoneRadiusMeters;
+  }
   if (params.status) {
     mission.status = params.status;
     if (params.status === "ACTIVE" && params.resetWinner) {
@@ -1388,8 +1409,112 @@ export async function updateMissionRecord(params: {
     }
   }
   mission.updatedAt = new Date().toISOString();
-  persistDb(db);
   return mission;
+}
+
+export async function deleteMissionRecord(params: {
+  missionId: string;
+  brandId: string;
+}): Promise<{ deleted: boolean; refundedCredit: boolean; remainingCredits: number }> {
+  if (isCloudDbEnabled()) {
+    const prisma = getPrisma();
+    const existing = await prisma.mission.findUnique({
+      where: { id: params.missionId },
+    });
+    if (!existing || existing.brandId !== params.brandId) {
+      return { deleted: false, refundedCredit: false, remainingCredits: 0 };
+    }
+
+    return prisma.$transaction(async (tx) => {
+      // Desasociar nodos QR asignados a esta misión
+      await tx.reusableQrNode.updateMany({
+        where: { assignedMissionId: existing.id },
+        data: { assignedMissionId: null },
+      });
+
+      // Si no fue capturada/ganada, devolver 1 crédito a la marca
+      const shouldRefund = !existing.winnerHunterId && existing.status !== "CAPTURED";
+      let brandCredits = 0;
+
+      if (shouldRefund) {
+        const updatedBrand = await tx.brand.update({
+          where: { id: params.brandId },
+          data: { missionCredits: { increment: 1 } },
+        });
+        brandCredits = updatedBrand.missionCredits;
+
+        await tx.creditTransaction.create({
+          data: {
+            brandId: params.brandId,
+            delta: 1,
+            reason: `Reembolso por eliminación de drop no reclamado: ${existing.title} (${existing.city})`,
+            performedBy: "Panel Comercio",
+          },
+        });
+      } else {
+        const b = await tx.brand.findUnique({ where: { id: params.brandId } });
+        brandCredits = b?.missionCredits ?? 0;
+      }
+
+      // Eliminar la misión (Cascade automático en pings, telemetría y claims)
+      await tx.mission.delete({
+        where: { id: existing.id },
+      });
+
+      return {
+        deleted: true,
+        refundedCredit: shouldRefund,
+        remainingCredits: brandCredits,
+      };
+    });
+  }
+
+  // Fallback en memoria
+  const db = getDb();
+  const missionIndex = db.missions.findIndex(
+    (m) => m.id === params.missionId && m.brandId === params.brandId
+  );
+  if (missionIndex === -1) {
+    return { deleted: false, refundedCredit: false, remainingCredits: 0 };
+  }
+
+  const existing = db.missions[missionIndex];
+  const shouldRefund = !existing.winnerHunterId && existing.status !== "CAPTURED";
+
+  // Desasociar nodo
+  db.reusableNodes.forEach((node) => {
+    if (node.assignedMissionId === existing.id) {
+      node.assignedMissionId = null;
+    }
+  });
+
+  const brand = db.brands.find((b) => b.id === params.brandId);
+  if (brand && shouldRefund) {
+    brand.missionCredits += 1;
+    db.creditLedger.push({
+      id: `ctx_${crypto.randomUUID().slice(0, 8)}`,
+      brandId: params.brandId,
+      delta: 1,
+      reason: `Reembolso por eliminación de drop: ${existing.title}`,
+      performedBy: "Panel Comercio",
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  // Eliminar telemetría, pings y claims vinculados
+  db.hunterPings = db.hunterPings.filter((p) => p.missionId !== existing.id);
+  db.telemetry = db.telemetry.filter((t) => t.missionId !== existing.id);
+  db.claims = db.claims.filter((c) => c.missionId !== existing.id);
+
+  // Eliminar misión
+  db.missions.splice(missionIndex, 1);
+  persistDb(db);
+
+  return {
+    deleted: true,
+    refundedCredit: shouldRefund,
+    remainingCredits: brand?.missionCredits ?? 0,
+  };
 }
 
 // ============================================================================

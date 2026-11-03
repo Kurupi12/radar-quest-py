@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
+  AlertTriangle,
   BellRing,
   Car,
   Check,
@@ -12,6 +13,7 @@ import {
   Compass,
   Crosshair,
   Download,
+  Edit,
   ExternalLink,
   Flame,
   Layers,
@@ -27,8 +29,10 @@ import {
   Rocket,
   ShieldAlert,
   Smartphone,
+  Trash2,
   Trophy,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 import type {
@@ -162,6 +166,9 @@ export function BrandAdminClient({
   const [validationMode, setValidationMode] = useState<ValidationMode>("HYBRID");
   const [savingMission, setSavingMission] = useState(false);
   const [builderFeedback, setBuilderFeedback] = useState<string | null>(null);
+  const [editingMission, setEditingMission] = useState<Mission | null>(null);
+  const [deletingMission, setDeletingMission] = useState<Mission | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const pollLiveCommandCenter = useCallback(async () => {
     try {
@@ -322,53 +329,167 @@ export function BrandAdminClient({
     }
   };
 
-  const handleCreateMission = async (e: React.FormEvent) => {
+  const handleStartEditMission = (m: Mission) => {
+    setEditingMission(m);
+    setTitle(m.title);
+    setCity(m.city);
+    setZoneHint(m.zoneHint);
+    setPrizeTitle(m.prizeTitle);
+    setConsolationTitle(m.consolationTitle);
+    setMinPings(m.minPingsForMajorPrize);
+    setValidationMode(m.validationMode);
+    setSelectedNodeCode(m.nodeCode || "");
+    setPinLat(m.secretLat);
+    setPinLng(m.secretLng);
+    setBuilderFeedback(null);
+    setActiveTab("builder");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 400, behavior: "smooth" });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMission(null);
+    setTitle("");
+    setZoneHint("");
+    setPrizeTitle("");
+    setConsolationTitle("Cupón Explorador Curioso - 15% OFF");
+    setMinPings(3);
+    setSelectedNodeCode("");
+    setBuilderFeedback(null);
+  };
+
+  const handleSaveMission = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingMission(true);
     setBuilderFeedback(null);
 
     try {
-      const res = await fetch("/api/admin/missions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brandSlug: brand.slug,
-          title,
-          city,
-          zoneHint,
-          secretLat: pinLat,
-          secretLng: pinLng,
-          prizeTitle,
-          consolationTitle,
-          nodeCode: selectedNodeCode || null,
-          minPingsForMajorPrize: minPings,
-          validationMode,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setBuilderFeedback(data.message || "Error al crear misión.");
-        setSavingMission(false);
-        return;
-      }
+      if (editingMission) {
+        // Modo Edición: Actualizar ubicación y parámetros de la misión existente
+        const res = await fetch("/api/admin/missions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            missionId: editingMission.id,
+            title,
+            city,
+            zoneHint,
+            secretLat: pinLat,
+            secretLng: pinLng,
+            prizeTitle,
+            consolationTitle,
+            nodeCode: selectedNodeCode || null,
+            minPingsForMajorPrize: minPings,
+            validationMode,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          setBuilderFeedback(data.message || "Error al actualizar misión.");
+          setSavingMission(false);
+          return;
+        }
 
-      setTitle("");
-      setZoneHint("");
-      setPrizeTitle("");
-      setSelectedMissionId(data.mission.id);
-      setBuilderFeedback(
-        `Misión "${data.mission.title}" activada en ${data.mission.city}. Notificación Web Push disparada a suscriptores locales. Créditos restantes: ${data.remainingCredits}.`
-      );
-      await pollLiveCommandCenter();
-      const mRes = await fetch(
-        `/api/admin/missions?brandSlug=${encodeURIComponent(brand.slug)}`
-      );
-      const mJson = await mRes.json();
-      if (mJson.ok) setNodes(mJson.reusableNodes);
+        // Actualizar lista local
+        setMissions((prev) =>
+          prev.map((m) => (m.id === data.mission.id ? data.mission : m))
+        );
+        setBuilderFeedback(
+          `Misión "${data.mission.title}" actualizada exitosamente. Nueva ubicación fijada y zona difusa recalculada.`
+        );
+        setEditingMission(null);
+        handleCancelEdit();
+        await pollLiveCommandCenter();
+      } else {
+        // Modo Creación: Nueva misión (-1 crédito)
+        const res = await fetch("/api/admin/missions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            brandSlug: brand.slug,
+            title,
+            city,
+            zoneHint,
+            secretLat: pinLat,
+            secretLng: pinLng,
+            prizeTitle,
+            consolationTitle,
+            nodeCode: selectedNodeCode || null,
+            minPingsForMajorPrize: minPings,
+            validationMode,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          setBuilderFeedback(data.message || "Error al crear misión.");
+          setSavingMission(false);
+          return;
+        }
+
+        setTitle("");
+        setZoneHint("");
+        setPrizeTitle("");
+        setSelectedMissionId(data.mission.id);
+        setBrand((prev) => ({
+          ...prev,
+          missionCredits: data.remainingCredits,
+        }));
+        setBuilderFeedback(
+          `Misión "${data.mission.title}" activada en ${data.mission.city}. Notificación Web Push disparada a suscriptores locales. Créditos restantes: ${data.remainingCredits}.`
+        );
+        await pollLiveCommandCenter();
+        const mRes = await fetch(
+          `/api/admin/missions?brandSlug=${encodeURIComponent(brand.slug)}`
+        );
+        const mJson = await mRes.json();
+        if (mJson.ok) setNodes(mJson.reusableNodes);
+      }
     } catch {
       setBuilderFeedback("Error de red guardando misión.");
     } finally {
       setSavingMission(false);
+    }
+  };
+
+  const handleDeleteMission = async () => {
+    if (!deletingMission) return;
+    setIsDeleting(true);
+
+    try {
+      const res = await fetch(
+        `/api/admin/missions?missionId=${encodeURIComponent(deletingMission.id)}`,
+        {
+          method: "DELETE",
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        alert(data.message || "Error al eliminar la misión.");
+        setIsDeleting(false);
+        return;
+      }
+
+      const deletedId = deletingMission.id;
+      setMissions((prev) => prev.filter((m) => m.id !== deletedId));
+      if (data.refundedCredit) {
+        setBrand((prev) => ({
+          ...prev,
+          missionCredits: data.remainingCredits,
+        }));
+      }
+
+      if (selectedMissionId === deletedId) {
+        const remaining = missions.filter((m) => m.id !== deletedId);
+        setSelectedMissionId(remaining[0]?.id || "");
+      }
+
+      setDeletingMission(null);
+      await pollLiveCommandCenter();
+    } catch {
+      alert("Error de red al intentar eliminar la misión.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -689,6 +810,26 @@ export function BrandAdminClient({
                           ? "Leyendo GPS..."
                           : "Mover Tesoro a Mi Ubicación"}
                       </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditMission(selectedMission)}
+                      className="px-3 py-2 rounded-lg bg-purple-600/40 hover:bg-purple-600/70 border border-purple-400/50 text-purple-200 font-extrabold text-xs flex items-center gap-1.5 cursor-pointer transition"
+                      title="Editar coordenadas secretas o datos de esta misión"
+                    >
+                      <Edit className="w-4 h-4 text-purple-300" />
+                      <span>Editar Misión</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDeletingMission(selectedMission)}
+                      className="px-3 py-2 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-500/50 text-red-300 font-extrabold text-xs flex items-center gap-1.5 cursor-pointer transition"
+                      title="Eliminar este drop permanentemente"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-400" />
+                      <span>Eliminar</span>
                     </button>
 
                     <button
@@ -1065,9 +1206,34 @@ export function BrandAdminClient({
                 )}
               </div>
 
-              {/* CREATE MISSION FORM */}
+              {/* EDIT MODE BANNER */}
+              {editingMission && (
+                <div className="p-4 rounded-xl bg-purple-950/90 border-2 border-purple-400/80 flex items-center justify-between gap-3 text-xs shadow-lg">
+                  <div className="flex items-center gap-2.5">
+                    <Edit className="w-5 h-5 text-purple-300 shrink-0" />
+                    <div>
+                      <p className="font-extrabold text-white uppercase tracking-wide">
+                        MODO EDICIÓN: {editingMission.title}
+                      </p>
+                      <p className="text-slate-300 text-[11px]">
+                        Reubicá el pin en el mapa interactivo satelital o modificá los textos y presioná guardar.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer flex items-center gap-1 shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Cancelar</span>
+                  </button>
+                </div>
+              )}
+
+              {/* CREATE / EDIT MISSION FORM */}
               <form
-                onSubmit={handleCreateMission}
+                onSubmit={handleSaveMission}
                 className="p-5 rf-panel rf-panel-cyan space-y-3.5 shadow-2xl relative overflow-hidden"
               >
                 {/* Top-Right Hazard Caution Tab */}
@@ -1075,11 +1241,17 @@ export function BrandAdminClient({
 
                 <div className="flex items-center justify-between">
                   <h2 className="font-bold text-base text-white">
-                    Configurar Nueva Misión (-1 Crédito)
+                    {editingMission
+                      ? `Editar Misión: ${editingMission.title}`
+                      : "Configurar Nueva Misión (-1 Crédito)"}
                   </h2>
                   <span className="text-[10px] text-cyan-300 flex items-center gap-1">
                     <BellRing className="w-3.5 h-3.5" />
-                    <span>Dispara Web Push automático</span>
+                    <span>
+                      {editingMission
+                        ? "Actualiza coordenadas y zona difusa"
+                        : "Dispara Web Push automático"}
+                    </span>
                   </span>
                 </div>
 
@@ -1298,12 +1470,16 @@ export function BrandAdminClient({
                 <button
                   type="submit"
                   disabled={savingMission}
-                  className="w-full py-3 rf-btn-gold text-sm tracking-widest flex items-center justify-center gap-2"
+                  className={`w-full py-3 ${
+                    editingMission ? "rf-btn-cyan" : "rf-btn-gold"
+                  } text-sm tracking-widest flex items-center justify-center gap-2`}
                 >
                   <Rocket className="w-4 h-4" />
                   <span>
                     {savingMission
-                      ? "PUBLICANDO MISIÓN..."
+                      ? "GUARDANDO CAMBIOS..."
+                      : editingMission
+                      ? "GUARDAR CAMBIOS DE LA MISIÓN"
                       : "PUBLICAR Y ACTIVAR MISIÓN EN MAPA NACIONAL"}
                   </span>
                 </button>
@@ -1446,15 +1622,16 @@ export function BrandAdminClient({
                       <a
                         href={qrImgSrc}
                         download={`QR-${brand.slug}-${codeToUse}.svg`}
-                        className="flex-1 py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-center"
+                        className="flex-1 py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-center text-xs flex items-center justify-center gap-1.5"
                       >
-                        Descargar QR SVG
+                        <Download className="w-3.5 h-3.5 shrink-0" />
+                        <span>QR SVG</span>
                       </a>
                       {m.status === "ACTIVE" ? (
                         <button
                           type="button"
                           onClick={() => handleToggleMissionStatus(m, "PAUSED")}
-                          className="px-3 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 cursor-pointer"
+                          className="px-3 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 cursor-pointer text-xs"
                         >
                           Pausar
                         </button>
@@ -1462,17 +1639,99 @@ export function BrandAdminClient({
                         <button
                           type="button"
                           onClick={() => handleToggleMissionStatus(m, "ACTIVE")}
-                          className="px-3 py-2 rounded-lg bg-emerald-600 text-white font-bold cursor-pointer flex items-center gap-1"
+                          className="px-3 py-2 rounded-lg bg-emerald-600 text-white font-bold cursor-pointer flex items-center gap-1 text-xs"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Activar</span>
                         </button>
                       )}
                     </div>
+
+                    {/* Botones de Edición de Ubicación y Eliminación */}
+                    <div className="flex gap-2 pt-2 border-t border-purple-500/20">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEditMission(m)}
+                        className="flex-1 py-2 px-3 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 text-purple-200 font-extrabold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition"
+                      >
+                        <Edit className="w-3.5 h-3.5 shrink-0 text-cyan-300" />
+                        <span>Editar Misión</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingMission(m)}
+                        className="py-2 px-3 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-500/40 text-red-300 font-extrabold text-xs flex items-center justify-center gap-1 cursor-pointer transition"
+                        title="Eliminar este drop permanentemente"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 shrink-0 text-red-400" />
+                        <span>Eliminar</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* ================================================================ */}
+        {/* MODAL RETROFUTURISTA: CONFIRMAR ELIMINACIÓN DE DROP              */}
+        {/* ================================================================ */}
+        {deletingMission && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="rf-panel rf-panel-crimson max-w-md w-full p-6 space-y-4 shadow-2xl relative border-2 border-red-500">
+              <div className="flex items-center gap-2 text-red-400 font-black text-sm uppercase tracking-wider">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <span>CONFIRMAR ELIMINACIÓN DE DROP</span>
+              </div>
+
+              <div className="space-y-2 text-xs text-slate-300 leading-relaxed">
+                <p>
+                  ¿Estás seguro de que deseás eliminar permanentemente la misión{" "}
+                  <strong className="text-white">"{deletingMission.title}"</strong> en{" "}
+                  <strong className="text-cyan-300">{deletingMission.city}</strong>?
+                </p>
+                <p className="text-slate-400">
+                  Esta acción es irreversible y eliminará todos los pings de rastreo y telemetría asociados.
+                </p>
+              </div>
+
+              {!deletingMission.winnerHunterId && deletingMission.status !== "CAPTURED" ? (
+                <div className="p-3 rounded-lg bg-emerald-950/60 border border-emerald-400/50 text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <span>
+                    Drop no capturado: Al eliminarlo se reembolsará{" "}
+                    <strong>+1 crédito de drop</strong> a tu cuenta de comercio.
+                  </span>
+                </div>
+              ) : (
+                <div className="p-3 rounded-lg bg-amber-950/60 border border-amber-400/50 text-amber-300 text-xs">
+                  Aviso: Este drop ya fue capturado por{" "}
+                  <strong className="text-white">{deletingMission.winnerAlias || "un cazador"}</strong>.
+                  Se eliminarán los registros históricos del mapa.
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeletingMission(null)}
+                  disabled={isDeleting}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs uppercase cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteMission}
+                  disabled={isDeleting}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs uppercase cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(239,68,68,0.5)]"
+                >
+                  <Trash2 className="w-4 h-4 shrink-0" />
+                  <span>{isDeleting ? "ELIMINANDO..." : "SÍ, ELIMINAR"}</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
