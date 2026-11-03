@@ -208,6 +208,7 @@ export function RadarCanvasOverlay({
 }: RadarCanvasOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const walkImagesRef = useRef<HTMLImageElement[]>([]);
+  const jumpImagesRef = useRef<HTMLImageElement[]>([]);
   const flamesImgRef = useRef<HTMLImageElement | null>(null);
   const stateRef = useRef({
     thermalState,
@@ -217,15 +218,23 @@ export function RadarCanvasOverlay({
     secondaryColor,
   });
 
-  // Preload PixelLab walk animation frames & thermal flames spritesheet
+  // Preload PixelLab walk & jump celebration animation frames & thermal flames spritesheet
   useEffect(() => {
-    const images: HTMLImageElement[] = [];
+    const walkImages: HTMLImageElement[] = [];
     for (let i = 0; i < 9; i++) {
       const img = new Image();
       img.src = `/sprites/walk_south/frame_${i}.png`;
-      images.push(img);
+      walkImages.push(img);
     }
-    walkImagesRef.current = images;
+    walkImagesRef.current = walkImages;
+
+    const jumpImages: HTMLImageElement[] = [];
+    for (let i = 0; i < 9; i++) {
+      const img = new Image();
+      img.src = `/sprites/jump_south/frame_${i}.png`;
+      jumpImages.push(img);
+    }
+    jumpImagesRef.current = jumpImages;
 
     const flamesImg = new Image();
     flamesImg.src = "/sprites/flames/flames_sheet.png";
@@ -381,20 +390,33 @@ export function RadarCanvasOverlay({
         }
       }
 
-      // 4. Draw 16-bit Hunter Sprite (PixelLab Walk Animation or Cyber Car)
-      const walkImages = walkImagesRef.current;
-      const currentWalkIdx = Math.floor(tick / 6) % 9;
-      const walkImg = walkImages[currentWalkIdx];
+      // 4. Draw 16-bit Hunter Sprite (Jump Celebration when QUEMANDO, Walk otherwise, or Cyber Car)
+      const isBurning = currentThermal === "QUEMANDO";
+      const spriteList = isBurning
+        ? jumpImagesRef.current
+        : walkImagesRef.current;
+      const animSpeed = isBurning ? 5 : 6;
+      const currentIdx =
+        Math.floor(tick / animSpeed) % (spriteList.length || 9);
+      const spriteImg = spriteList[currentIdx];
 
-      if (!vehicle && walkImg && walkImg.complete && walkImg.naturalWidth > 0) {
-        const drawSize = 46;
-        // Ground shadow
+      if (!vehicle && spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
+        const drawSize = isBurning ? 48 : 46;
+        // Ground shadow (reacts dynamically to vertical jump phase)
+        const shadowScale = isBurning
+          ? 0.75 + Math.sin(tick * 0.25) * 0.25
+          : 1;
         ctx.fillStyle = "rgba(10, 4, 24, 0.72)";
-        ctx.fillRect(cx - 11, cy + 13, 22, 5);
+        ctx.fillRect(
+          cx - 11 * shadowScale,
+          cy + 13,
+          22 * shadowScale,
+          5
+        );
 
         // Render PixelLab 16-bit animated hunter
         ctx.drawImage(
-          walkImg,
+          spriteImg,
           Math.round(cx - drawSize / 2),
           Math.round(cy - drawSize / 2 - 1),
           drawSize,
