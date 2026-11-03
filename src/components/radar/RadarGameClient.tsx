@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -14,6 +14,7 @@ import {
   Gift,
   Lock,
   MapPin,
+  Navigation,
   Radio,
   ShieldAlert,
   Snowflake,
@@ -30,6 +31,9 @@ import type {
   PublicMission,
   RadarClaimResponse,
   RadarPingResponse,
+  TacticalCooldownSnapshot,
+  TacticalHint,
+  TacticalTrend,
   ThermalState,
 } from "@/types/radar";
 import { ArcadeMap } from "@/components/radar/ArcadeMap";
@@ -41,6 +45,7 @@ import { ViralRecorder } from "@/components/radar/ViralRecorder";
 import { RadarPreloader } from "@/components/radar/RadarPreloader";
 import { BrandIconSvg } from "@/components/icons/BrandIconSvg";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
+import { VEHICLE_OVERRIDE_MESSAGE } from "@/lib/radar/tacticalVectorAssistance";
 
 interface RadarGameClientProps {
   initialBrand: PublicBrand;
@@ -148,6 +153,96 @@ function ThermalStatusIcon({ state }: { state: ThermalState }) {
   }
 }
 
+interface TacticalVectorReadoutProps {
+  tacticalHint?: TacticalHint | null;
+  inVehicleMode: boolean;
+  speedKmh: number;
+}
+
+const TacticalVectorReadout = memo(function TacticalVectorReadout({
+  tacticalHint,
+  inVehicleMode,
+  speedKmh,
+}: TacticalVectorReadoutProps) {
+  const isVehicle = inVehicleMode || speedKmh >= 20;
+  const targetMessage = isVehicle
+    ? VEHICLE_OVERRIDE_MESSAGE
+    : tacticalHint?.message ||
+      "CALIBRANDO VECTOR: CAMINA A PIE PARA FIJAR RUMBO";
+  const effectiveTrend: TacticalTrend = isVehicle
+    ? "NEUTRAL"
+    : tacticalHint?.trend || "NEUTRAL";
+  const deltaMeters = tacticalHint?.deltaMeters ?? 0;
+
+  const [typedText, setTypedText] = useState<string>("");
+  const [isTyping, setIsTyping] = useState<boolean>(false);
+
+  useEffect(() => {
+    let charIdx = 0;
+    setTypedText("");
+    setIsTyping(true);
+
+    const timer = window.setInterval(() => {
+      charIdx += 1;
+      if (charIdx >= targetMessage.length) {
+        setTypedText(targetMessage);
+        setIsTyping(false);
+        window.clearInterval(timer);
+      } else {
+        setTypedText(targetMessage.slice(0, charIdx));
+      }
+    }, 22);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [targetMessage]);
+
+  const variantClass = isVehicle
+    ? "rf-tactical-neutral"
+    : effectiveTrend === "CLOSING_IN"
+    ? "rf-tactical-closing"
+    : effectiveTrend === "DRIFTING_AWAY"
+    ? "rf-tactical-drifting"
+    : "rf-tactical-neutral";
+
+  const showDelta = !isVehicle && Math.abs(deltaMeters) >= 1;
+  const formattedDelta = `${deltaMeters > 0 ? "+" : ""}${Math.round(
+    deltaMeters
+  )}M`;
+
+  return (
+    <div
+      className={`rf-tactical-slot ${variantClass} px-2.5 py-1.5 flex items-center justify-between gap-2`}
+    >
+      <div className="flex items-center gap-1.5 min-w-0">
+        {isVehicle ? (
+          <Car className="w-3.5 h-3.5 shrink-0" />
+        ) : effectiveTrend === "CLOSING_IN" ? (
+          <Navigation className="w-3.5 h-3.5 shrink-0" />
+        ) : effectiveTrend === "DRIFTING_AWAY" ? (
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+        ) : (
+          <Compass className="w-3.5 h-3.5 shrink-0" />
+        )}
+        <p className="font-retro text-[14px] leading-tight tracking-wider uppercase break-words">
+          <span>{typedText}</span>
+          <span
+            className={`inline-block w-1.5 h-3 ml-0.5 align-middle bg-current ${
+              isTyping ? "opacity-100" : "animate-pulse"
+            }`}
+          />
+        </p>
+      </div>
+      {showDelta && (
+        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/50 border border-current/40 shrink-0">
+          {formattedDelta}
+        </span>
+      )}
+    </div>
+  );
+});
+
 export function RadarGameClient({
   initialBrand,
   initialMissions,
@@ -218,6 +313,7 @@ export function RadarGameClient({
 
   const mapCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const tacticalSnapshotRef = useRef<TacticalCooldownSnapshot | null>(null);
   const coordsRef = useRef(coords);
   coordsRef.current = coords;
 
@@ -370,6 +466,7 @@ export function RadarGameClient({
   useEffect(() => {
     if (selectedMission) {
       setPingData(null);
+      tacticalSnapshotRef.current = null;
       if (gpsMode === "simulator") {
         setCoords({
           lat: selectedMission.publicCenterLat,
@@ -399,11 +496,15 @@ export function RadarGameClient({
             hunterId: hunter.id,
             alias: hunter.alias,
             sessionToken,
+            prevTacticalState: tacticalSnapshotRef.current,
           }),
         });
 
         const data = (await res.json()) as RadarPingResponse;
         if (data.ok) {
+          if (data.tacticalStateSnapshot) {
+            tacticalSnapshotRef.current = data.tacticalStateSnapshot;
+          }
           setPingData(data);
           if (data.dangerAlert?.active) {
             arcadeHardware.playRivalDangerSiren();
@@ -852,6 +953,13 @@ export function RadarGameClient({
                   <strong className="text-cyan-300">Pista:</strong>{" "}
                   {selectedMission.zoneHint}
                 </p>
+
+                {/* TACTICAL VECTOR ASSISTANCE (Dynamic Walking Kinematics & Typewriter HUD) */}
+                <TacticalVectorReadout
+                  tacticalHint={pingData?.tacticalHint}
+                  inVehicleMode={Boolean(pingData?.inVehicleMode)}
+                  speedKmh={pingData?.speedKmh ?? 0}
+                />
               </div>
             )}
 

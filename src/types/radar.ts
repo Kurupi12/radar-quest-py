@@ -253,6 +253,26 @@ export interface BrandAnalyticsSummary {
   pushSubscribersCount: number;
 }
 
+export type TacticalTrend =
+  | "CLOSING_IN"
+  | "DRIFTING_AWAY"
+  | "STAGNANT"
+  | "NEUTRAL";
+
+export interface TacticalHint {
+  trend: TacticalTrend;
+  message: string;
+  deltaMeters: number;
+}
+
+export interface TacticalCooldownSnapshot {
+  trend: TacticalTrend;
+  message: string;
+  deltaMeters: number;
+  emittedAtMs: number;
+  wasVehicle: boolean;
+}
+
 export interface RadarPingRequest {
   missionId: string;
   brandSlug: string;
@@ -262,6 +282,7 @@ export interface RadarPingRequest {
   hunterId: string;
   alias: string;
   sessionToken?: string;
+  prevTacticalState?: TacticalCooldownSnapshot | null;
 }
 
 export interface DangerAlert {
@@ -280,6 +301,8 @@ export interface RadarPingResponse {
   anomalyMessage: string | null;
   activeHuntersCount: number;
   dangerAlert: DangerAlert;
+  tacticalHint: TacticalHint;
+  tacticalStateSnapshot?: TacticalCooldownSnapshot;
   proofOfHuntProgress: {
     currentValidPings: number;
     requiredPings: number;

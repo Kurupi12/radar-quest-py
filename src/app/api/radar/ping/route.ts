@@ -24,6 +24,14 @@ export async function POST(request: Request) {
       );
     }
 
+    const prevState =
+      body.prevTacticalState &&
+      typeof body.prevTacticalState === "object" &&
+      typeof body.prevTacticalState.message === "string" &&
+      typeof body.prevTacticalState.emittedAtMs === "number"
+        ? body.prevTacticalState
+        : null;
+
     const result = await processRadarPing({
       ...body,
       lat: Number(body.lat),
@@ -31,6 +39,7 @@ export async function POST(request: Request) {
       accuracy: Number(body.accuracy || 12),
       hunterId: effectiveHunterId,
       alias: effectiveAlias,
+      prevTacticalState: prevState,
     });
 
     return NextResponse.json(result);

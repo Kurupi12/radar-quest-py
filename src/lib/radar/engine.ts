@@ -31,9 +31,14 @@ import {
   calculateHaversineMeters,
   isValidLatLng,
 } from "@/lib/radar/geo";
+import {
+  evaluateTacticalVectorAssistance,
+  type KinematicPingSample,
+} from "@/lib/radar/tacticalVectorAssistance";
 
 const ACTIVE_HUNTER_WINDOW_MS = 90_000;
 const DANGER_ZONE_METERS = 65;
+const TACTICAL_KINEMATIC_WINDOW_MS = 30_000;
 
 function computeThermalBracket(
   distanceMeters: number,
@@ -192,11 +197,13 @@ export async function processRadarPing(
   let validHuntPings = 0;
   let activeHuntersCount = 1;
   let rivalCount = 0;
+  let kinematicSamples: KinematicPingSample[] = [];
 
   if (isCloudDbEnabled()) {
     const prisma = getPrisma();
     const prismaThermal = toPrismaThermal(thermalState);
     const windowCutoff = new Date(nowMs - ACTIVE_HUNTER_WINDOW_MS);
+    const kinematicCutoff = new Date(nowMs - TACTICAL_KINEMATIC_WINDOW_MS);
 
     // Ensure hunter FK exists in cloud DB
     await prisma.hunter.upsert({
@@ -210,76 +217,95 @@ export async function processRadarPing(
       },
     });
 
-    const [, updatedTelemetry, activeTelemetryRows] = await prisma.$transaction([
-      prisma.hunterPing.create({
-        data: {
-          missionId: mission.id,
-          hunterId: input.hunterId,
-          alias: input.alias || "@cazador",
-          lat: input.lat,
-          lng: input.lng,
-          accuracy: safeAcc,
-          distanceMeters: roundedDist,
-          speedKmh: roundedSpeed,
-          inVehicleMode,
-          isAnomaly: isTeleportAnomaly,
-          thermalState: prismaThermal,
-        },
-      }),
-      prisma.hunterMissionTelemetry.upsert({
-        where: {
-          missionId_hunterId: {
+    const [, updatedTelemetry, activeTelemetryRows, recentPingRows] =
+      await prisma.$transaction([
+        prisma.hunterPing.create({
+          data: {
             missionId: mission.id,
             hunterId: input.hunterId,
+            alias: input.alias || "@cazador",
+            lat: input.lat,
+            lng: input.lng,
+            accuracy: safeAcc,
+            distanceMeters: roundedDist,
+            speedKmh: roundedSpeed,
+            inVehicleMode,
+            isAnomaly: isTeleportAnomaly,
+            thermalState: prismaThermal,
           },
-        },
-        update: {
-          alias: input.alias || "@cazador",
-          lastLat: input.lat,
-          lastLng: input.lng,
-          lastAccuracy: safeAcc,
-          lastDistanceMeters: roundedDist,
-          speedKmh: roundedSpeed,
-          inVehicleMode,
-          thermalState: prismaThermal,
-          pingCount: { increment: 1 },
-          ...(isTeleportAnomaly
-            ? { anomalyFlags: { increment: 1 } }
-            : isInsideZone
-            ? { validHuntPings: { increment: 1 } }
-            : {}),
-          lastPingAt: new Date(nowMs),
-        },
-        create: {
-          missionId: mission.id,
-          hunterId: input.hunterId,
-          alias: input.alias || "@cazador",
-          lastLat: input.lat,
-          lastLng: input.lng,
-          lastAccuracy: safeAcc,
-          lastDistanceMeters: roundedDist,
-          speedKmh: roundedSpeed,
-          inVehicleMode,
-          thermalState: prismaThermal,
-          pingCount: 1,
-          validHuntPings: !isTeleportAnomaly && isInsideZone ? 1 : 0,
-          anomalyFlags: isTeleportAnomaly ? 1 : 0,
-          firstPingAt: new Date(nowMs),
-          lastPingAt: new Date(nowMs),
-        },
-      }),
-      prisma.hunterMissionTelemetry.findMany({
-        where: {
-          missionId: mission.id,
-          lastPingAt: { gte: windowCutoff },
-        },
-        select: {
-          hunterId: true,
-          thermalState: true,
-          lastDistanceMeters: true,
-        },
-      }),
-    ]);
+        }),
+        prisma.hunterMissionTelemetry.upsert({
+          where: {
+            missionId_hunterId: {
+              missionId: mission.id,
+              hunterId: input.hunterId,
+            },
+          },
+          update: {
+            alias: input.alias || "@cazador",
+            lastLat: input.lat,
+            lastLng: input.lng,
+            lastAccuracy: safeAcc,
+            lastDistanceMeters: roundedDist,
+            speedKmh: roundedSpeed,
+            inVehicleMode,
+            thermalState: prismaThermal,
+            pingCount: { increment: 1 },
+            ...(isTeleportAnomaly
+              ? { anomalyFlags: { increment: 1 } }
+              : isInsideZone
+              ? { validHuntPings: { increment: 1 } }
+              : {}),
+            lastPingAt: new Date(nowMs),
+          },
+          create: {
+            missionId: mission.id,
+            hunterId: input.hunterId,
+            alias: input.alias || "@cazador",
+            lastLat: input.lat,
+            lastLng: input.lng,
+            lastAccuracy: safeAcc,
+            lastDistanceMeters: roundedDist,
+            speedKmh: roundedSpeed,
+            inVehicleMode,
+            thermalState: prismaThermal,
+            pingCount: 1,
+            validHuntPings: !isTeleportAnomaly && isInsideZone ? 1 : 0,
+            anomalyFlags: isTeleportAnomaly ? 1 : 0,
+            firstPingAt: new Date(nowMs),
+            lastPingAt: new Date(nowMs),
+          },
+        }),
+        prisma.hunterMissionTelemetry.findMany({
+          where: {
+            missionId: mission.id,
+            lastPingAt: { gte: windowCutoff },
+          },
+          select: {
+            hunterId: true,
+            thermalState: true,
+            lastDistanceMeters: true,
+          },
+        }),
+        prisma.hunterPing.findMany({
+          where: {
+            missionId: mission.id,
+            hunterId: input.hunterId,
+            createdAt: { gte: kinematicCutoff },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: {
+            lat: true,
+            lng: true,
+            distanceMeters: true,
+            speedKmh: true,
+            inVehicleMode: true,
+            isAnomaly: true,
+            createdAt: true,
+          },
+        }),
+      ]);
 
     validHuntPings = updatedTelemetry.validHuntPings;
     activeHuntersCount = Math.max(1, activeTelemetryRows.length);
@@ -289,6 +315,19 @@ export async function processRadarPing(
         r.thermalState !== "TELEPORT_ANOMALY" &&
         r.lastDistanceMeters <= DANGER_ZONE_METERS
     ).length;
+
+    kinematicSamples = recentPingRows
+      .slice()
+      .reverse()
+      .map((p) => ({
+        lat: p.lat,
+        lng: p.lng,
+        distanceMeters: p.distanceMeters,
+        speedKmh: p.speedKmh,
+        inVehicleMode: p.inVehicleMode,
+        isAnomaly: p.isAnomaly,
+        timestampMs: p.createdAt.getTime(),
+      }));
   } else {
     const db = getDb();
     // Append individual HunterPing record (keep capped at last 500 pings in local JSON store)
@@ -367,7 +406,76 @@ export async function processRadarPing(
         t.thermalState !== "TELEPORT_ANOMALY" &&
         t.lastDistanceMeters <= DANGER_ZONE_METERS
     ).length;
+
+    kinematicSamples = db.hunterPings
+      .filter(
+        (p) =>
+          p.missionId === mission.id &&
+          p.hunterId === input.hunterId &&
+          nowMs - new Date(p.createdAt).getTime() <=
+            TACTICAL_KINEMATIC_WINDOW_MS
+      )
+      .slice(0, 10)
+      .reverse()
+      .map((p) => ({
+        lat: p.lat,
+        lng: p.lng,
+        distanceMeters: p.distanceMeters,
+        speedKmh: p.speedKmh,
+        inVehicleMode: p.inVehicleMode,
+        isAnomaly: p.isAnomaly,
+        timestampMs: new Date(p.createdAt).getTime(),
+      }));
   }
+
+  // Ensure current ping is at the tail of kinematicSamples and backfill prevTelemetry if sparse
+  const currentSample: KinematicPingSample = {
+    lat: input.lat,
+    lng: input.lng,
+    distanceMeters: roundedDist,
+    speedKmh: roundedSpeed,
+    inVehicleMode,
+    isAnomaly: isTeleportAnomaly,
+    timestampMs: nowMs,
+  };
+
+  if (
+    kinematicSamples.length === 0 ||
+    Math.abs(
+      kinematicSamples[kinematicSamples.length - 1].timestampMs - nowMs
+    ) > 1500
+  ) {
+    kinematicSamples.push(currentSample);
+  }
+
+  if (kinematicSamples.length < 2 && prevTelemetry) {
+    const prevMs = new Date(prevTelemetry.lastPingAt).getTime();
+    if (prevMs < nowMs && nowMs - prevMs <= 45_000) {
+      kinematicSamples.unshift({
+        lat: prevTelemetry.lastLat,
+        lng: prevTelemetry.lastLng,
+        distanceMeters: prevTelemetry.lastDistanceMeters,
+        speedKmh: prevTelemetry.speedKmh,
+        inVehicleMode: prevTelemetry.inVehicleMode,
+        isAnomaly: prevTelemetry.thermalState === "TELEPORT_ANOMALY",
+        timestampMs: prevMs,
+      });
+    }
+  }
+
+  const { tacticalHint, snapshot: tacticalStateSnapshot } =
+    evaluateTacticalVectorAssistance({
+      missionId: mission.id,
+      hunterId: input.hunterId,
+      nowMs,
+      currentDistanceMeters: roundedDist,
+      currentSpeedKmh: roundedSpeed,
+      inVehicleMode,
+      isTeleportAnomaly,
+      thermalState,
+      recentSamples: kinematicSamples,
+      clientPrevState: input.prevTacticalState || null,
+    });
 
   const dangerAlert =
     rivalCount > 0 && mission.status === "ACTIVE"
@@ -407,6 +515,8 @@ export async function processRadarPing(
     anomalyMessage,
     activeHuntersCount,
     dangerAlert,
+    tacticalHint,
+    tacticalStateSnapshot,
     proofOfHuntProgress: {
       currentValidPings: validHuntPings,
       requiredPings: mission.minPingsForMajorPrize,
