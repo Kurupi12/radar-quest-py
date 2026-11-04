@@ -1156,7 +1156,7 @@ export function RadarGameClient({
 
           {/* CLIMAX VICTORY FLOATING MODAL (<30m) */}
           {currentThermal === "QUEMANDO" &&
-            selectedMission?.status === "ACTIVE" &&
+            (selectedMission?.status === "ACTIVE" || selectedMission?.status === "CAPTURED") &&
             !victoryBannerDismissed &&
             !showInAppScanner &&
             !showPresentialModal &&
@@ -1184,17 +1184,39 @@ export function RadarGameClient({
 
                   {/* Victory Headers & Climax Messaging */}
                   <div className="space-y-1">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 font-pixel text-[11px] animate-pulse">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>¡ESTÁS QUEMANDO!</span>
-                    </div>
-                    <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-200 to-pink-400 font-pixel tracking-wide">
-                      ¡LLEGASTE AL TESORO!
-                    </h2>
-                    <p className="text-xs text-slate-200 leading-snug">
-                      Estás a menos de <strong>30 metros</strong> del premio secreto.
-                      ¡Realiza la captura ahora antes de que otro cazador lo reclame!
-                    </p>
+                    {selectedMission?.status === "CAPTURED" ? (
+                      <>
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-400/50 text-rose-300 font-pixel text-[11px] animate-pulse">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>PREMIO MAYOR YA RECLAMADO</span>
+                        </div>
+                        <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-rose-300 to-cyan-300 font-pixel tracking-wide">
+                          ¡LLEGASTE AL LUGAR SECRETO!
+                        </h2>
+                        <p className="text-xs text-slate-200 leading-snug">
+                          El Premio Mayor ya fue reclamado por{" "}
+                          <strong className="text-yellow-300">
+                            {selectedMission.winnerAlias || "otro cazador"}
+                          </strong>
+                          . ¡Pero completaste la búsqueda física! Registrá tu llegada para canjear tu{" "}
+                          <strong className="text-cyan-300">Premio Oficial de Consuelo</strong>.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 font-pixel text-[11px] animate-pulse">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>¡ESTÁS QUEMANDO!</span>
+                        </div>
+                        <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-200 to-pink-400 font-pixel tracking-wide">
+                          ¡LLEGASTE AL TESORO!
+                        </h2>
+                        <p className="text-xs text-slate-200 leading-snug">
+                          Estás a menos de <strong>30 metros</strong> del premio secreto.
+                          ¡Realiza la captura ahora antes de que otro cazador lo reclame!
+                        </p>
+                      </>
+                    )}
                   </div>
 
                   {/* Primary Action Button (Single-Tap Victory Claim) */}
@@ -1209,7 +1231,11 @@ export function RadarGameClient({
                         className="w-full py-3.5 px-4 rf-btn-gold text-xs font-black flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(250,204,21,0.55)] cursor-pointer"
                       >
                         <QrCode className="w-5 h-5 shrink-0" />
-                        <span>ESCANEAR CÓDIGO QR AHORA</span>
+                        <span>
+                          {selectedMission?.status === "CAPTURED"
+                            ? "ESCANEAR QR (RECLAMAR CONSUELO)"
+                            : "ESCANEAR CÓDIGO QR AHORA"}
+                        </span>
                       </button>
                     )}
 
@@ -1227,6 +1253,8 @@ export function RadarGameClient({
                         <span>
                           {presentialClaiming
                             ? "REGISTRANDO CAPTURA..."
+                            : selectedMission?.status === "CAPTURED"
+                            ? "¡LLEGUÉ AL PUNTO! (RECLAMAR CONSUELO)"
                             : "¡LLEGUÉ AL PUNTO! REGISTRARME"}
                         </span>
                       </button>
