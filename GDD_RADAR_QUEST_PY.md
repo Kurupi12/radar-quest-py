@@ -64,8 +64,8 @@ El servidor evalúa la distancia geodésica exacta mediante la fórmula de **Hav
 | **`FUERA DE ZONA`** | `> zoneRadiusMeters` (def. `3.500 m`) | `6%` | Jugador fuera del radio operativo de la misión. Sonar lento púrpura y eventos periódicos de congelamiento del avatar. |
 | **`CONGELADO`** | `650 m` a `3.500 m` | `24%` | En zona urbana activa pero lejos del objetivo. Anillos celestes lentos y activación del sistema estocástico de escarcha. |
 | **`TIBIO`** | `160 m` a `650 m` | `52%` | Acercamiento confirmado en el barrio correcto. Anillos amarillos, desaparece el frío y la música conmuta con crossfade al tema de tensión (`110 BPM`). |
-| **`CALIENTE`** | `30 m` a `160 m` *(o `< 30 m` en vehículo)* | `78%` | Proximidad alta. Se enciende el aura de llamas pixel-art, sube la ganancia del bajo modular de tensión y, si va a `>= 20 km/h`, bloquea el avance aquí. |
-| **`QUEMANDO`** | **`< 30 m` y velocidad `< 20 km/h` (a pie)** | `98%` | Zona de captura alcanzada. Estalla el tema Synthwave Clímax (`120 BPM`), el personaje salta entre llamas y **se desbloquea la captura**. |
+| **`CALIENTE`** | `30 m` a `160 m` *(o `< 30 m` en vehículo `>= 35 km/h`)* | `78%` | Proximidad alta. Se enciende el aura de llamas pixel-art, sube la ganancia del bajo modular de tensión y, si va a alta velocidad, bloquea el avance aquí. |
+| **`QUEMANDO`** | **`< 30 m` y velocidad `< 35 km/h` (a pie / tolerancia GPS)** | `98%` | Zona de captura alcanzada. Estalla el tema Synthwave Clímax (`120 BPM`), el personaje salta entre llamas, **se despliega el Modal Flotante Central de Victoria con el Cofre PixelLab** y **se desbloquea la captura instantánea**. |
 | **`TELEPORT_ANOMALY`** | Salto `> 500 m` en `<= 45 s` o `> 130 km/h` | `0%` | Penalización Anti-Spoofing activa. Bloquea el progreso de caza y cualquier intento de reclamo. |
 
 ### 3.3. Asistencia Táctica de Trayectoria (`TacticalVectorAssistance`)
@@ -134,7 +134,7 @@ sequenceDiagram
 
 1. **Ofuscación Geodésica Determinista (`computePublicZoneCenter`):** Los endpoints públicos eliminan `secretLat` y `secretLng` a nivel de DTO (`PublicMission`). Para centrar la cámara inicial del mapa en el barrio aproximado sin delatar el escondite en las herramientas de desarrollador (*DevTools Network Inspector*), el servidor calcula un centro público desplazado entre **`180 m` y `270 m`** en un ángulo derivado de un hash determinista de la misión.
 2. **Cinemática Anti-Spoofing (`TELEPORT_ANOMALY`):** El servidor compara el vector espacio-temporal contra el ping anterior. Saltos imposibles (`> 500 m` en `<= 45 s` o velocidades `> 130 km/h` en desplazamientos `>= 25 m`) marcan el ping como anomalía, incrementan `anomalyFlags` del jugador y bloquean el reclamo con código `TELEPORT_LOCKED`.
-3. **Seguridad Vial y Gobernador de Velocidad (`inVehicleMode`):** Entre `20 km/h` y `130 km/h`, el motor detecta desplazamiento en automóvil o motocicleta. Congela el techo térmico en `CALIENTE`, impide desbloquear el estado `QUEMANDO` y desactiva el escáner óptico, forzando al jugador a estacionar y buscar a pie.
+3. **Seguridad Vial y Gobernador de Velocidad (`inVehicleMode`) con Tolerancia de Clímax en `<30m`:** En trayecto abierto entre `20 km/h` y `130 km/h`, el motor detecta desplazamiento en automóvil o motocicleta, congela el techo térmico en `CALIENTE`, impide desbloquear el estado `QUEMANDO` y desactiva el escáner óptico. Sin embargo, al pisar el radio crítico de captura (`< 30 m`), el sistema aplica un filtro de absorción de jitter para celulares donde la tolerancia se calibra a `< 35 km/h` mientras esté en `QUEMANDO`, evitando que saltos momentáneos del GPS deshabiliten el botón de captura a jugadores que ya están físicamente en el lugar a pie.
 4. **Tolerancia GPS Adaptativa con Techo Inquebrantable (`calculateEffectiveCaptureRadius`):** En cañones urbanos (edificios altos o arboledas densas), el GPS civil presenta deriva horizontal. El radio de validación suma el `60%` de la incertidumbre reportada (`accuracy * 0.6`, hasta `+30 m`) sobre la base de `35 m`, pero aplica un **techo estricto de `65 m`** para neutralizar ataques donde un cliente manipulado inyecte `accuracy: 99999`.
 5. **Identidad Firmada (`HMAC-SHA256`):** Las sesiones de cazadores, paneles de comercio y super-administración utilizan firmas criptográficas `HMAC-SHA256` en cookies `HttpOnly` combinadas con tokens de verificación.
 
@@ -199,6 +199,13 @@ El protagonista es un **Cazador Urbano Cyberpunk de 16 bits** (`48x48 px` base, 
 * **Aura de Fuego de 16 Bits (`flames_sheet.png`):** Spritesheet dedicado de **8 fotogramas** (`68x103 px` por celda, 12 FPS, rampa pura de 4 colores sin dithering) anclado al pivote de los pies del personaje en estados `CALIENTE` y `QUEMANDO`.
 * **Emisor de Brasas Ascendentes:** Sistema de partículas ligero a 60 FPS alineado a sub-grilla de `2px` que inyecta chispas incandescentes (`#ff0055`, `#fb923c`, `#fde047`, `#ffffff`) con desvanecimiento alfa lineal según su tiempo de vida.
 * **Escena de Victoria (`PixelVictoryCanvas`):** Lienzo independiente en el modal de captura con lluvia perpetua de 34 chispas multicolor y un **Trofeo Dorado 16-Bit** (o Medalla Explorador Cian) levitando en el centro.
+
+### 6.3. Clímax de Captura y Modal Flotante de Victoria (PixelLab Asset)
+
+Para resolver de raíz el riesgo de que el jugador llegue físicamente al punto y no perciba con claridad inmediata que alcanzó la meta, al entrar en **`¡QUEMANDO!`** (`< 30 m`), el juego despliega un **Modal Flotante Central de Victoria** (`.rf-victory-banner-frame`):
+* **Cofre del Tesoro Victorioso de 16 Bits (`golden_chest_victory.png`):** Sprite de 64x64 píxeles generado con **PixelLab**, con tapa entreabierta, gemas luminosas, herrajes de oro y resplandor radial con animación de levitación vertical continua (`@keyframes rfVictoryChestFloat`).
+* **Botón Gigante de Captura de Un Toque:** Destaca visualmente el método de validación activo (`ESCANEAR CÓDIGO QR AHORA` o `¡LLEGUÉ AL PUNTO! REGISTRARME`) con sombras de neón dinámicas para que el cazador complete el reclamo sin buscar controles en el HUD.
+* **Control de Descarte y Cierre Sutil:** Si el usuario desea continuar visualizando el mapa y las animaciones antes de escanear, puede minimizar el banner con un botón `X` de bajo contraste, manteniendo el acceso a los botones de captura en el zócalo inferior.
 
 ---
 

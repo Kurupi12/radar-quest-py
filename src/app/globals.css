@@ -546,6 +546,59 @@ h4 {
     0 0 6px rgba(245, 158, 11, 0.28);
 }
 
+/* 11. Climax Victory Floating Banner & Chest Animation */
+@keyframes rfVictoryChestFloat {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+    filter: drop-shadow(0 0 16px rgba(250, 204, 21, 0.85));
+  }
+  50% {
+    transform: translateY(-8px) scale(1.05);
+    filter: drop-shadow(0 0 28px rgba(236, 72, 153, 0.95));
+  }
+}
+
+@keyframes rfVictoryBeaconSweep {
+  0% {
+    opacity: 0.3;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 0.3;
+    transform: scale(0.92);
+  }
+}
+
+.rf-victory-chest {
+  animation: rfVictoryChestFloat 2s ease-in-out infinite;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.rf-victory-banner-frame {
+  position: relative;
+  background: radial-gradient(circle at center, rgba(30, 15, 60, 0.96) 0%, rgba(9, 4, 20, 0.98) 100%);
+  border: 2px solid #facc15;
+  box-shadow:
+    0 0 35px rgba(250, 204, 21, 0.45),
+    inset 0 0 20px rgba(236, 72, 153, 0.35);
+  clip-path: polygon(
+    12px 0,
+    calc(100% - 12px) 0,
+    100% 12px,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    12px 100%,
+    0 calc(100% - 12px),
+    0 12px
+  );
+}
+
+
 
 
 

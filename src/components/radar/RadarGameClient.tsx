@@ -23,7 +23,10 @@ import {
   Users,
   Volume2,
   VolumeX,
+  X,
   Zap,
+  QrCode,
+  Sparkles,
 } from "lucide-react";
 import type {
   Hunter,
@@ -306,6 +309,8 @@ export function RadarGameClient({
   );
 
   const [pingData, setPingData] = useState<RadarPingResponse | null>(null);
+  const currentThermal: ThermalState =
+    pingData?.thermalState || "FUERA DE ZONA";
   const [muted, setMuted] = useState(false);
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [preloaderDismissed, setPreloaderDismissed] = useState(false);
@@ -321,6 +326,15 @@ export function RadarGameClient({
   );
   // Phase 2 In-App Retro-Arcade Camera Scanner (enabled ONLY in QUEMANDO & <20 km/h)
   const [showInAppScanner, setShowInAppScanner] = useState(false);
+  // Floating Climax Victory Banner state (<30m)
+  const [victoryBannerDismissed, setVictoryBannerDismissed] = useState(false);
+
+  // Re-open victory banner when entering QUEMANDO
+  useEffect(() => {
+    if (currentThermal === "QUEMANDO") {
+      setVictoryBannerDismissed(false);
+    }
+  }, [currentThermal]);
 
   // Presential GPS Victory Mode state (Marketing team waiting on-site)
   const [showPresentialModal, setShowPresentialModal] = useState(false);
@@ -652,9 +666,6 @@ export function RadarGameClient({
     };
   }, []);
 
-  const currentThermal: ThermalState =
-    pingData?.thermalState || "FUERA DE ZONA";
-
   // Conmutar BGM adaptativa según estado térmico (Exploración vs. Tensión en TIBIO / CALIENTE)
   useEffect(() => {
     arcadeHardware.syncBgmWithThermalState(currentThermal);
@@ -666,22 +677,20 @@ export function RadarGameClient({
     missionValidationMode
   );
 
-  // Strict Phase 2 Rule: Enable QR Scanner ONLY when thermalState === 'QUEMANDO' (<30m and speed <20 km/h) AND mode !== "PRESENTIAL_GPS"
+  // Enable QR Scanner when thermalState === 'QUEMANDO' (<30m) with mobile GPS jitter tolerance
   const canOpenScanner = Boolean(
     missionValidationMode !== "PRESENTIAL_GPS" &&
       (pingData?.canOpenQrScanner ??
         (currentThermal === "QUEMANDO" &&
-          !pingData?.inVehicleMode &&
-          (pingData?.speedKmh ?? 0) < 20))
+          (!pingData?.inVehicleMode || (pingData?.speedKmh ?? 0) < 35)))
   );
 
-  // Presential Mode: Enable GPS Claim button when in QUEMANDO (<30m, speed <20km/h) AND mode !== "QR_SCAN"
+  // Presential Mode: Enable GPS Claim button when in QUEMANDO (<30m) with mobile GPS jitter tolerance
   const canClaimPresential = Boolean(
     missionValidationMode !== "QR_SCAN" &&
       (pingData?.canClaimPresential ??
         (currentThermal === "QUEMANDO" &&
-          !pingData?.inVehicleMode &&
-          (pingData?.speedKmh ?? 0) < 20 &&
+          (!pingData?.inVehicleMode || (pingData?.speedKmh ?? 0) < 35) &&
           selectedMission?.status === "ACTIVE"))
   );
 
@@ -1144,6 +1153,96 @@ export function RadarGameClient({
               </div>
             </div>
           </footer>
+
+          {/* CLIMAX VICTORY FLOATING MODAL (<30m) */}
+          {currentThermal === "QUEMANDO" &&
+            selectedMission?.status === "ACTIVE" &&
+            !victoryBannerDismissed &&
+            !showInAppScanner &&
+            !showPresentialModal &&
+            !showExternalClaimModal && (
+              <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="relative w-full max-w-xs sm:max-w-sm p-5 rf-victory-banner-frame text-center space-y-4">
+                  {/* Close / Dismiss button */}
+                  <button
+                    type="button"
+                    onClick={() => setVictoryBannerDismissed(true)}
+                    className="absolute top-2.5 right-2.5 p-1.5 text-slate-400 hover:text-white rounded-lg bg-black/50 hover:bg-black/80 transition"
+                    aria-label="Cerrar modal de victoria"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+
+                  {/* 16-bit Victory Chest Sprite from PixelLab */}
+                  <div className="pt-2 flex justify-center">
+                    <img
+                      src="/sprites/golden_chest_victory.png"
+                      alt="Cofre Dorado Victorioso"
+                      className="rf-victory-chest w-24 h-24 object-contain pointer-events-none drop-shadow-[0_0_20px_rgba(250,204,21,0.7)]"
+                    />
+                  </div>
+
+                  {/* Victory Headers & Climax Messaging */}
+                  <div className="space-y-1">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 font-pixel text-[11px] animate-pulse">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>¡ESTÁS QUEMANDO!</span>
+                    </div>
+                    <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-200 to-pink-400 font-pixel tracking-wide">
+                      ¡LLEGASTE AL TESORO!
+                    </h2>
+                    <p className="text-xs text-slate-200 leading-snug">
+                      Estás a menos de <strong>30 metros</strong> del premio secreto.
+                      ¡Realiza la captura ahora antes de que otro cazador lo reclame!
+                    </p>
+                  </div>
+
+                  {/* Primary Action Button (Single-Tap Victory Claim) */}
+                  <div className="space-y-2 pt-1">
+                    {missionValidationMode !== "PRESENTIAL_GPS" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVictoryBannerDismissed(true);
+                          setShowInAppScanner(true);
+                        }}
+                        className="w-full py-3.5 px-4 rf-btn-gold text-xs font-black flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(250,204,21,0.55)] cursor-pointer"
+                      >
+                        <QrCode className="w-5 h-5 shrink-0" />
+                        <span>ESCANEAR CÓDIGO QR AHORA</span>
+                      </button>
+                    )}
+
+                    {missionValidationMode !== "QR_SCAN" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVictoryBannerDismissed(true);
+                          handlePresentialClaim();
+                        }}
+                        disabled={presentialClaiming}
+                        className="w-full py-3.5 px-4 rf-btn-emerald text-xs font-black flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(16,185,129,0.55)] cursor-pointer"
+                      >
+                        <Sparkles className="w-5 h-5 shrink-0" />
+                        <span>
+                          {presentialClaiming
+                            ? "REGISTRANDO CAPTURA..."
+                            : "¡LLEGUÉ AL PUNTO! REGISTRARME"}
+                        </span>
+                      </button>
+                    )}
+
+                    <p className="text-[10px] text-slate-400 font-mono">
+                      {missionValidationMode === "QR_SCAN"
+                        ? "Enfoca la cámara hacia el cartel o sticker oficial de la marca."
+                        : missionValidationMode === "PRESENTIAL_GPS"
+                        ? "El equipo de la marca te entregará el premio en el punto."
+                        : "Puedes escanear el QR o registrar tu llegada directa."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
           {/* 3-SECOND ARCADE ONBOARDING GATE */}
           {!checkingSession && !hunter && (

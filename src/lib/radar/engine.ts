@@ -493,10 +493,11 @@ export async function processRadarPing(
           message: null,
         };
 
-  // Strict Phase 2 rule: In-app scanner unlocked ONLY in QUEMANDO (<30m) and walking (<20 km/h)
+  // Strict Phase 2 rule: In-app scanner & Presential claim unlocked in QUEMANDO (<30m)
+  // When inside <30m, allow pedestrian tolerance (up to 35 km/h to absorb mobile GPS jitter/spikes)
   const validationMode = mission.validationMode || "HYBRID";
   const isCloseEnough =
-    thermalState === "QUEMANDO" && !inVehicleMode && roundedSpeed < 20;
+    thermalState === "QUEMANDO" && (!inVehicleMode || roundedSpeed < 35);
 
   const canOpenQrScanner =
     isCloseEnough &&
