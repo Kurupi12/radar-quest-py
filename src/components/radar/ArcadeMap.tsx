@@ -257,7 +257,7 @@ export function ArcadeMap({
           continue;
         }
 
-        // 2. High-Contrast Multicolor Geographical Elements
+        // 2. High-Contrast Multicolor Geographical Elements (Tactical Dark Cyberpunk Palette)
         if (layer.type === "background") {
           try {
             map.setPaintProperty(layer.id, "background-color", "#080d1a");
@@ -268,26 +268,41 @@ export function ArcadeMap({
           if (id.includes("water")) {
             // Rivers, Lakes & Bays: Electric Cobalt / Deep Cyan
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#0369a1");
-              map.setPaintProperty(layer.id, "fill-opacity", 0.95);
+              map.setPaintProperty(layer.id, "fill-color", "#0284c7");
+              map.setPaintProperty(layer.id, "fill-opacity", 0.9);
             } catch {}
           } else if (
             id.includes("park") ||
-            id.includes("landuse") ||
-            id.includes("landcover") ||
+            id.includes("garden") ||
+            id.includes("grass") ||
+            id.includes("pitch") ||
             id.includes("forest") ||
-            id.includes("grass")
+            id.includes("wood") ||
+            id.includes("leisure") ||
+            id.includes("recreation")
           ) {
-            // Parks, Plazas & Greenery: Vivid Cyber Emerald Green
+            // Authentic Green Spaces (Parks, Plazas & Sports Grounds): Deep Cyber Emerald
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#059669");
+              map.setPaintProperty(layer.id, "fill-color", "#065f46");
               map.setPaintProperty(layer.id, "fill-opacity", 0.85);
             } catch {}
-          } else if (id.includes("building")) {
-            // Buildings & Urban Blocks: Crisp Dark Slate Navy (neutral high-tech)
+          } else if (
+            id.includes("landuse") ||
+            id.includes("landcover") ||
+            id.includes("residential") ||
+            id.includes("commercial") ||
+            id.includes("industrial")
+          ) {
+            // Urban Blocks & Zoned Ground: Subtle Dark Slate (prevents green flood over entire city)
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#131d33");
-              map.setPaintProperty(layer.id, "fill-outline-color", "#233355");
+              map.setPaintProperty(layer.id, "fill-color", "#0f172a");
+              map.setPaintProperty(layer.id, "fill-opacity", 0.75);
+            } catch {}
+          } else if (id.includes("building")) {
+            // 16-Bit Architectural Buildings: Crisp Slate Steel with Clean Borders
+            try {
+              map.setPaintProperty(layer.id, "fill-color", "#1e293b");
+              map.setPaintProperty(layer.id, "fill-outline-color", "#334155");
               map.setPaintProperty(layer.id, "fill-opacity", 0.95);
             } catch {}
           }
@@ -318,16 +333,16 @@ export function ArcadeMap({
               id.includes("secondary") || id.includes("_sec_");
             const isCasing = id.includes("case") || id.includes("casing");
 
-            // Major Avenues: Electric Amber/Yellow (#facc15 / #f97316)
-            // Secondary Arteries: Vivid Neon Orange / Coral (#fb923c)
-            // Residential Streets: Crisp Cyan Neon (#00f0ff)
+            // Major Avenues: Amber Neon (#f59e0b)
+            // Secondary Arteries: Warm Orange (#fb923c)
+            // Residential Streets: Refined Tactical Cyan (#38bdf8)
             const streetColor = isHighSpeed
               ? "#f59e0b"
               : isPrimary
-              ? "#facc15"
+              ? "#fbbf24"
               : isSecondary
               ? "#fb923c"
-              : "#00f0ff";
+              : "#38bdf8";
 
             try {
               map.setPaintProperty(
@@ -338,7 +353,7 @@ export function ArcadeMap({
               map.setPaintProperty(
                 layer.id,
                 "line-opacity",
-                isCasing ? 0.95 : 1.0
+                isCasing ? 0.95 : isHighSpeed || isPrimary ? 1.0 : 0.82
               );
             } catch {}
           } else if (id.includes("boundary")) {

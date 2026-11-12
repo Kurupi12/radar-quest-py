@@ -165,14 +165,16 @@ Toda la interfaz gráfica (HUD en vivo, preloader, modales de registro, escáner
 En lugar de utilizar un mapa comercial genérico que rompería la inmersión del videojuego, `ArcadeMap` intercepta el árbol de capas vectoriales de MapLibre al cargar el estilo y ejecuta un *shader/paint pass* completo:
 
 * **Limpieza Quirúrgica anti-distracción:** Oculta dinámicamente todos los puntos de interés comerciales ajenos (`poi`, `aeroway`, `housenumber`), dejando únicamente la geometría urbana y los nombres de calles con texto blanco puro y halo negro de `2.2px` para orientación inmediata al caminar.
-* **Jerarquía Cromática Neón:**
-  * *Rutas y Autopistas:* Ámbar Intenso (`#f59e0b`)
-  * *Avenidas Primarias:* Amarillo Eléctrico (`#facc15`)
+* **Jerarquía Cromática Cyberpunk Táctica:**
+  * *Fondo Urbano / Manzanas Generales:* Azul Noche Pizarra Profundo (`#080d1a` / `#0f172a`), evitando inundar la ciudad de verde artificial.
+  * *Rutas y Autopistas:* Ámbar Neón (`#f59e0b`)
+  * *Avenidas Primarias:* Dorado Cálido (`#fbbf24`)
   * *Arterias Secundarias:* Naranja Neón (`#fb923c`)
-  * *Calles Residenciales:* Cian Láser (`#00f0ff` con bordes `#020617`)
-  * *Parques y Plazas:* Verde Esmeralda Cyber (`#059669`)
-  * *Ríos y Cuerpos de Agua:* Azul Cobalto Profundo (`#0369a1`) con costas iluminadas (`#38bdf8`)
-  * *Manzanas y Edificios:* Pizarra Nocturno (`#131d33` con contorno `#233355`)
+  * *Calles Residenciales:* Cian Táctico Refinado (`#38bdf8` a 82% opacidad)
+  * *Parques y Plazas Reales:* Verde Esmeralda Bosque Oscuro (`#065f46`), contrastando como oasis sobre el chasis urbano.
+  * *Ríos y Cuerpos de Agua:* Azul Cobalto Profundo (`#0284c7`) con costas iluminadas (`#38bdf8`)
+  * *Edificios y Manzanas (16-Bit):* Bloques de acero pizarra (`#1e293b`) con contorno nítido geométrico (`#334155`).
+  * *Textura CRT:* Scanlines cinematográficas sutiles (`opacity: 0.18`), aportando grano analógico sin opacar la legibilidad del mapa.
 
 ---
 

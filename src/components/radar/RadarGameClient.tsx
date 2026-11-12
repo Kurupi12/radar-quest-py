@@ -803,7 +803,7 @@ export function RadarGameClient({
             onCanvasReady={handleOverlayCanvasReady}
           />
 
-          <div className="crt-scanlines pointer-events-none absolute inset-0 z-10 opacity-45" />
+          <div className="crt-scanlines pointer-events-none absolute inset-0 z-10 opacity-18" />
 
           {/* TOP HUD (Retrofuturistic Cockpit Chassis) */}
           <header className="absolute top-0 inset-x-0 z-20 p-2 space-y-1.5">
