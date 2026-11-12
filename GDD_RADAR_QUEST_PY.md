@@ -165,6 +165,14 @@ Toda la interfaz gráfica (HUD en vivo, preloader, modales de registro, escáner
 En lugar de utilizar un mapa comercial genérico que rompería la inmersión del videojuego, `ArcadeMap` intercepta el árbol de capas vectoriales de MapLibre al cargar el estilo y ejecuta un *shader/paint pass* completo:
 
 * **Limpieza Quirúrgica anti-distracción:** Oculta dinámicamente todos los puntos de interés comerciales ajenos (`poi`, `aeroway`, `housenumber`), dejando únicamente la geometría urbana y los nombres de calles con texto blanco puro y halo negro de `2.2px` para orientación inmediata al caminar.
+* **Generador de Texturas Pixel-Art 16-Bit en Tiempo Real (`mapTextures.ts`):**
+  * Para evitar polígonos vectoriales planos y artificiales, el motor genera directamente en memoria typed arrays `ImageData` con baldosas repetitivas (`fill-pattern` / `background-pattern`):
+    * *Césped Vivo 16-Bit (`rpg-grass-pattern` — 32x32):* Manto verde con dithering orgánico, 8 mechones de hierba con volumen de 3px y micro-flores silvestres (margaritas blancas y dientes de león amarillos).
+    * *Bosque y Parques (`rpg-park-forest-pattern` — 32x32):* Follaje denso en verde profundo con sombras de copas.
+    * *Agua con Olas (`rpg-water-pattern` — 32x32):* Celeste cristalino con crestas y ondas de agua pixeladas blancas.
+    * *Techos Modernos 16-Bit (16x16):* Baldosas de losa blanca con tragaluces, pizarra grafito con unidades HVAC, terrazas de madera teca con reposeras, celdas fotovoltaicas solares azules y azoteas verdes sustentables.
+  * *Limpieza Total de Cruces:* Se ocultan completamente las líneas catastrales de frontera (`boundary`) para eliminar interferencias anaranjadas en esquinas.
+  * *Selector Modular de Tema (`CURRENT_MAP_THEME`):* Módulo desacoplado en `ArcadeMap.tsx` que permite alternar instantáneamente entre el modo experimental `rpg-16bit` y el modo táctico militar `cyberpunk-dark`.
 * **Jerarquía Cromática RPG 16-Bit con Casitas Modernas:**
   * *Fondo y Terreno General:* Césped verde vibrante 16-bit (`#5eb83a` / `#65be41`), evocando el estilo nostálgico de clásicos retro (Zelda / Pokémon SNES).
   * *Parques, Plazas y Arboledas:* Verde bosque denso (`#3e8c24`), aportando riqueza visual y contraste natural.

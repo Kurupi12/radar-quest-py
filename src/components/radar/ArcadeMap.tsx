@@ -8,6 +8,10 @@ import {
   type GeoJSONSource,
   type MapMouseEvent,
 } from "maplibre-gl";
+import { registerAllRpgTextures } from "@/lib/radar/mapTextures";
+
+// Active Map Visual Theme: 'rpg-16bit' (experimental textured pixel-art) vs 'cyberpunk-dark' (tactical dark theme)
+export const CURRENT_MAP_THEME: "rpg-16bit" | "cyberpunk-dark" = "rpg-16bit";
 
 // Fix for Next.js / Turbopack Worker loading
 if (typeof window !== "undefined") {
@@ -238,38 +242,35 @@ export function ArcadeMap({
 
     mapRef.current = map;
 
-    const applyArcade16BitPalette = () => {
-      const style = map.getStyle();
+    const applyCyberpunkDarkTheme = (mapInstance: MapLibreMap) => {
+      const style = mapInstance.getStyle();
       if (!style || !style.layers) return;
 
       for (const layer of style.layers) {
         const id = layer.id.toLowerCase();
 
-        // 1. Hide rival commercial POIs completely while preserving street & city labels
         if (
           id.includes("poi") ||
           id.includes("aeroway") ||
           id.includes("housenumber")
         ) {
           try {
-            map.setLayoutProperty(layer.id, "visibility", "none");
+            mapInstance.setLayoutProperty(layer.id, "visibility", "none");
           } catch {}
           continue;
         }
 
-        // 2. Fondo del Mundo RPG 16-Bit: Césped Verde Vibrante (Estilo Pokémon / Zelda SNES)
         if (layer.type === "background") {
           try {
-            map.setPaintProperty(layer.id, "background-color", "#5eb83a");
+            mapInstance.setPaintProperty(layer.id, "background-color", "#080d1a");
           } catch {}
         }
 
         if (layer.type === "fill") {
           if (id.includes("water")) {
-            // Ríos, Lagos y Bahías: Celeste Cristalino RPG
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#4ebaf7");
-              map.setPaintProperty(layer.id, "fill-opacity", 0.95);
+              mapInstance.setPaintProperty(layer.id, "fill-color", "#0284c7");
+              mapInstance.setPaintProperty(layer.id, "fill-opacity", 0.9);
             } catch {}
           } else if (
             id.includes("park") ||
@@ -281,10 +282,9 @@ export function ArcadeMap({
             id.includes("leisure") ||
             id.includes("recreation")
           ) {
-            // Parques, Plazas y Arboledas: Verde Bosque Denso 16-Bit
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#3e8c24");
-              map.setPaintProperty(layer.id, "fill-opacity", 0.95);
+              mapInstance.setPaintProperty(layer.id, "fill-color", "#065f46");
+              mapInstance.setPaintProperty(layer.id, "fill-opacity", 0.85);
             } catch {}
           } else if (
             id.includes("landuse") ||
@@ -293,96 +293,53 @@ export function ArcadeMap({
             id.includes("commercial") ||
             id.includes("industrial")
           ) {
-            // Manzanas y Parcelas Urbanas: Césped barrial vivo o plaza cálida
-            const isCommercial =
-              id.includes("commercial") || id.includes("industrial");
             try {
-              map.setPaintProperty(
-                layer.id,
-                "fill-color",
-                isCommercial ? "#85929e" : "#65be41"
-              );
-              map.setPaintProperty(
-                layer.id,
-                "fill-opacity",
-                isCommercial ? 0.35 : 0.88
-              );
+              mapInstance.setPaintProperty(layer.id, "fill-color", "#0f172a");
+              mapInstance.setPaintProperty(layer.id, "fill-opacity", 0.75);
             } catch {}
           } else if (id.includes("building")) {
-            // CASITAS Y EDIFICIOS MODERNOS 16-BIT (Arquitectura Contemporánea con relieve 2.5D)
             const isTopLayer = id.includes("top");
-
-            // Techos y Terrazas de Casas Modernas (capa 'building-top')
-            // 0: Minimalista Blanco Hormigón
-            // 1: Pizarra Antracita / Techo Plano Moderno
-            // 2: Terraza con Deck de Madera Teca Cálida
-            // 3: Azul Acero Vidrio Solar Templado
-            // 4: Azotea Verde Sustentable (Rooftop Garden)
-            // 5: Cemento y Estuco Caliza Contemporáneo
-            const modernRoofColors = [
+            const buildingColorExpr = [
               "match",
               ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
-              0, "#e8ecf2", // Blanco Hormigón Minimalista
-              1, "#334155", // Pizarra Antracita
-              2, "#bf8a58", // Terraza Deck Madera Teca
-              3, "#2d6391", // Azul Acero Vidrio Templado
-              4, "#4d8024", // Azotea Verde Ecológica
-              5, "#d8c8b2", // Caliza Arena Contemporánea
-              "#cbd5e1",
-            ];
-
-            // Fachadas y Paredes 2.5D de Casas Modernas (capa base 'building')
-            const modernWallColors = [
-              "match",
-              ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
-              0, "#475569", // Pared cemento visto
-              1, "#1e293b", // Pared grafito oscuro
-              2, "#5c3d22", // Pared madera oscura
-              3, "#17334d", // Pared azul noche
-              4, "#27420f", // Pared piedra ecológica
-              5, "#6b5945", // Pared piedra caliza
-              "#334155",
-            ];
-
-            // Contorno nítido pixel-art estilo cómic / videojuego japonés
-            const modernOutlineColors = [
-              "match",
-              ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
-              0, "#334155",
-              1, "#0f172a",
-              2, "#3b2513",
-              3, "#0c1d2e",
-              4, "#142406",
-              5, "#3b3024",
+              0, isTopLayer ? "#341c54" : "#1a0f2b",
+              1, isTopLayer ? "#113e47" : "#0a2228",
+              2, isTopLayer ? "#1a2e56" : "#0d182e",
+              3, isTopLayer ? "#442a19" : "#24160c",
+              4, isTopLayer ? "#3e162e" : "#220b19",
+              5, isTopLayer ? "#212b3d" : "#101620",
               "#1e293b",
             ];
 
+            const buildingOutlineExpr = [
+              "match",
+              ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
+              0, "#7c3aed",
+              1, "#06b6d4",
+              2, "#3b82f6",
+              3, "#f59e0b",
+              4, "#ec4899",
+              5, "#64748b",
+              "#334155",
+            ];
+
             try {
-              map.setPaintProperty(
-                layer.id,
-                "fill-color",
-                (isTopLayer ? modernRoofColors : modernWallColors) as any
-              );
-              map.setPaintProperty(
+              mapInstance.setPaintProperty(layer.id, "fill-color", buildingColorExpr as any);
+              mapInstance.setPaintProperty(
                 layer.id,
                 "fill-outline-color",
-                modernOutlineColors as any
+                buildingOutlineExpr as any
               );
-              map.setPaintProperty(layer.id, "fill-opacity", 0.98);
-              if (isTopLayer) {
-                map.setPaintProperty(layer.id, "fill-translate", [-2.5, -2.5]);
-              }
+              mapInstance.setPaintProperty(layer.id, "fill-opacity", 0.95);
             } catch {}
           }
         }
 
-        // 3. Red de Calles y Senderos RPG 16-Bit
         if (layer.type === "line") {
           if (id.includes("water")) {
-            // Orillas y cauces de agua delimitados con azul profundo
             try {
-              map.setPaintProperty(layer.id, "line-color", "#2582bf");
-              map.setPaintProperty(layer.id, "line-width", 2.2);
+              mapInstance.setPaintProperty(layer.id, "line-color", "#38bdf8");
+              mapInstance.setPaintProperty(layer.id, "line-width", 2);
             } catch {}
           } else if (
             id.includes("road") ||
@@ -396,22 +353,222 @@ export function ArcadeMap({
               id.includes("trunk") ||
               id.includes("_mot_") ||
               id.includes("_trunk_");
-            const isPrimary =
-              id.includes("primary") || id.includes("_pri_");
-            const isSecondary =
-              id.includes("secondary") || id.includes("_sec_");
+            const isPrimary = id.includes("primary") || id.includes("_pri_");
+            const isSecondary = id.includes("secondary") || id.includes("_sec_");
+            const isCasing = id.includes("case") || id.includes("casing");
+
+            const streetColor = isHighSpeed
+              ? "#f59e0b"
+              : isPrimary
+              ? "#fbbf24"
+              : isSecondary
+              ? "#fb923c"
+              : "#38bdf8";
+
+            try {
+              mapInstance.setPaintProperty(
+                layer.id,
+                "line-color",
+                isCasing ? "#020617" : streetColor
+              );
+              mapInstance.setPaintProperty(
+                layer.id,
+                "line-opacity",
+                isCasing ? 0.95 : isHighSpeed || isPrimary ? 1.0 : 0.82
+              );
+            } catch {}
+          } else if (id.includes("boundary")) {
+            try {
+              mapInstance.setPaintProperty(layer.id, "line-color", "#f43f5e");
+            } catch {}
+          }
+        }
+
+        if (layer.type === "symbol") {
+          try {
+            mapInstance.setPaintProperty(layer.id, "text-color", "#ffffff");
+            mapInstance.setPaintProperty(layer.id, "text-halo-color", "#020617");
+            mapInstance.setPaintProperty(layer.id, "text-halo-width", 2.2);
+          } catch {}
+        }
+      }
+    };
+
+    const applyRpg16BitTheme = (mapInstance: MapLibreMap) => {
+      // 1. Register 16-bit textures in the sprite catalog
+      registerAllRpgTextures(mapInstance);
+
+      const style = mapInstance.getStyle();
+      if (!style || !style.layers) return;
+
+      for (const layer of style.layers) {
+        const id = layer.id.toLowerCase();
+
+        // Hide POIs and boundary lines (clean up messy orange dashed lines in intersections)
+        if (
+          id.includes("poi") ||
+          id.includes("aeroway") ||
+          id.includes("housenumber") ||
+          id.includes("boundary")
+        ) {
+          try {
+            mapInstance.setLayoutProperty(layer.id, "visibility", "none");
+          } catch {}
+          continue;
+        }
+
+        // 2. Background: 16-Bit Seamless Grass Pattern
+        if (layer.type === "background") {
+          try {
+            mapInstance.setPaintProperty(
+              layer.id,
+              "background-pattern",
+              "rpg-grass-pattern"
+            );
+          } catch {}
+        }
+
+        if (layer.type === "fill") {
+          if (id.includes("water")) {
+            // Pixelated water ripples
+            try {
+              mapInstance.setPaintProperty(
+                layer.id,
+                "fill-pattern",
+                "rpg-water-pattern"
+              );
+              mapInstance.setPaintProperty(layer.id, "fill-opacity", 1.0);
+            } catch {}
+          } else if (
+            id.includes("park") ||
+            id.includes("garden") ||
+            id.includes("grass") ||
+            id.includes("pitch") ||
+            id.includes("forest") ||
+            id.includes("wood") ||
+            id.includes("leisure") ||
+            id.includes("recreation")
+          ) {
+            // Dense forest texture
+            try {
+              mapInstance.setPaintProperty(
+                layer.id,
+                "fill-pattern",
+                "rpg-park-forest-pattern"
+              );
+              mapInstance.setPaintProperty(layer.id, "fill-opacity", 1.0);
+            } catch {}
+          } else if (
+            id.includes("landuse") ||
+            id.includes("landcover") ||
+            id.includes("residential") ||
+            id.includes("commercial") ||
+            id.includes("industrial")
+          ) {
+            // Urban blocks: seamless 16-bit grass
+            try {
+              mapInstance.setPaintProperty(
+                layer.id,
+                "fill-pattern",
+                "rpg-grass-pattern"
+              );
+              mapInstance.setPaintProperty(layer.id, "fill-opacity", 1.0);
+            } catch {}
+          } else if (id.includes("building")) {
+            // Modern 16-bit Buildings
+            const isTopLayer = id.includes("top");
+
+            const modernRoofPatterns = [
+              "match",
+              ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
+              0, "rpg-roof-white-modern",
+              1, "rpg-roof-slate-modern",
+              2, "rpg-roof-deck-modern",
+              3, "rpg-roof-solar-modern",
+              4, "rpg-roof-green-modern",
+              5, "rpg-roof-sand-modern",
+              "rpg-roof-white-modern",
+            ];
+
+            const modernWallColors = [
+              "match",
+              ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
+              0, "#475569", // Pared cemento visto
+              1, "#1e293b", // Pared grafito oscuro
+              2, "#5c3d22", // Pared madera oscura
+              3, "#17334d", // Pared azul noche
+              4, "#27420f", // Pared piedra ecológica
+              5, "#6b5945", // Pared piedra caliza
+              "#334155",
+            ];
+
+            const modernOutlineColors = [
+              "match",
+              ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
+              0, "#334155",
+              1, "#0f172a",
+              2, "#3b2513",
+              3, "#0c1d2e",
+              4, "#142406",
+              5, "#3b3024",
+              "#1e293b",
+            ];
+
+            try {
+              if (isTopLayer) {
+                // Apply textured modern roof
+                mapInstance.setPaintProperty(
+                  layer.id,
+                  "fill-pattern",
+                  modernRoofPatterns as any
+                );
+                mapInstance.setPaintProperty(
+                  layer.id,
+                  "fill-outline-color",
+                  modernOutlineColors as any
+                );
+                mapInstance.setPaintProperty(layer.id, "fill-translate", [-2.5, -2.5]);
+                mapInstance.setPaintProperty(layer.id, "fill-opacity", 1.0);
+              } else {
+                // Base wall underneath
+                mapInstance.setPaintProperty(
+                  layer.id,
+                  "fill-color",
+                  modernWallColors as any
+                );
+                mapInstance.setPaintProperty(layer.id, "fill-opacity", 0.98);
+              }
+            } catch {}
+          }
+        }
+
+        // 4. Lines (Roads)
+        if (layer.type === "line") {
+          if (id.includes("water")) {
+            try {
+              mapInstance.setPaintProperty(layer.id, "line-color", "#2582bf");
+              mapInstance.setPaintProperty(layer.id, "line-width", 2.2);
+            } catch {}
+          } else if (
+            id.includes("road") ||
+            id.includes("transportation") ||
+            id.includes("bridge") ||
+            id.includes("tunnel") ||
+            id.includes("rail")
+          ) {
+            const isHighSpeed =
+              id.includes("motorway") ||
+              id.includes("trunk") ||
+              id.includes("_mot_") ||
+              id.includes("_trunk_");
+            const isPrimary = id.includes("primary") || id.includes("_pri_");
+            const isSecondary = id.includes("secondary") || id.includes("_sec_");
             const isPath =
               id.includes("path") ||
               id.includes("pedestrian") ||
               id.includes("footway");
             const isCasing = id.includes("case") || id.includes("casing");
 
-            // Paleta de Calles RPG:
-            // - Caminos peatonales / senderos de parque: Tierra / adoquín claro (#c49c66)
-            // - Calles residenciales / barriales: Pavimento gris urbano claro / empedrado (#8c96a3)
-            // - Avenidas secundarias: Asfalto gris (#56606f)
-            // - Avenidas principales: Asfalto oscuro (#434c58)
-            // - Autopistas / rutas: Asfalto carbón (#2b323c)
             const streetColor = isPath
               ? "#c49c66"
               : isHighSpeed
@@ -422,7 +579,6 @@ export function ArcadeMap({
               ? "#56606f"
               : "#8c96a3";
 
-            // Cordón cuneta y bordes definidos de calle estilo 16-bit
             const casingColor = isPath
               ? "#5c3d22"
               : isHighSpeed
@@ -432,32 +588,36 @@ export function ArcadeMap({
               : "#4a5563";
 
             try {
-              map.setPaintProperty(
+              mapInstance.setPaintProperty(
                 layer.id,
                 "line-color",
                 isCasing ? casingColor : streetColor
               );
-              map.setPaintProperty(
+              mapInstance.setPaintProperty(
                 layer.id,
                 "line-opacity",
                 isCasing ? 0.95 : 1.0
               );
             } catch {}
-          } else if (id.includes("boundary")) {
-            try {
-              map.setPaintProperty(layer.id, "line-color", "#ea580c");
-            } catch {}
           }
         }
 
-        // 4. Tipografía y Rótulos de Calles de Alta Legibilidad sobre mapa RPG
+        // 5. Symbols (Labels)
         if (layer.type === "symbol") {
           try {
-            map.setPaintProperty(layer.id, "text-color", "#ffffff");
-            map.setPaintProperty(layer.id, "text-halo-color", "#0f172a");
-            map.setPaintProperty(layer.id, "text-halo-width", 2.6);
+            mapInstance.setPaintProperty(layer.id, "text-color", "#ffffff");
+            mapInstance.setPaintProperty(layer.id, "text-halo-color", "#0f172a");
+            mapInstance.setPaintProperty(layer.id, "text-halo-width", 2.6);
           } catch {}
         }
+      }
+    };
+
+    const applyArcade16BitPalette = () => {
+      if (CURRENT_MAP_THEME === "rpg-16bit") {
+        applyRpg16BitTheme(map);
+      } else {
+        applyCyberpunkDarkTheme(map);
       }
 
       // 5. Mount HunterPing Heatmap Layer if enabled
