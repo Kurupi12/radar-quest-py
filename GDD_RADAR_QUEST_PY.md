@@ -171,6 +171,12 @@ En lugar de utilizar un mapa comercial genérico que rompería la inmersión del
     * *Bosque y Parques (`rpg-park-forest-pattern` — 32x32):* Follaje denso en verde profundo con sombras de copas.
     * *Agua con Olas (`rpg-water-pattern` — 32x32):* Celeste cristalino con crestas y ondas de agua pixeladas blancas.
     * *Techos Modernos 16-Bit (16x16):* Baldosas de losa blanca con tragaluces, pizarra grafito con unidades HVAC, terrazas de madera teca con reposeras, celdas fotovoltaicas solares azules y azoteas verdes sustentables.
+    * *Vegetación y Árboles 16-Bit Procedimentales (`rpg-trees-layer`):* Capa de símbolos WebGL acelerada por GPU que siembra árboles y arboledas estocásticas sobre el mapa mediante un hash espacial determinista (~38m):
+      - *Árbol Redondo Verde Oscuro (`rpg-tree-round-dark` — 24x28 px):* Tronco con raíces y copa redondeada en 3 lóbulos.
+      - *Árbol Redondo Verde Claro (`rpg-tree-round-light` — 24x28 px):* Copa verde lima luminosa.
+      - *Pino / Conífera (`rpg-tree-pine` — 20x28 px):* Silueta cónica en 3 niveles de agujas.
+      - *Arbusto de Jardín (`rpg-shrub` — 16x14 px):* Matas bajas redondeadas en veredas y patios.
+      - Anclaje inferior (`icon-anchor: "bottom"`) con ordenamiento en profundidad 2.5D y etiquetas de calles priorizadas por encima.
   * *Limpieza Total de Cruces:* Se ocultan completamente las líneas catastrales de frontera (`boundary`) para eliminar interferencias anaranjadas en esquinas.
   * *Selector Modular de Tema (`CURRENT_MAP_THEME`):* Módulo desacoplado en `ArcadeMap.tsx` que permite alternar instantáneamente entre el modo experimental `rpg-16bit` y el modo táctico militar `cyberpunk-dark`.
 * **Jerarquía Cromática RPG 16-Bit con Casitas Modernas:**

@@ -8,7 +8,10 @@ import {
   type GeoJSONSource,
   type MapMouseEvent,
 } from "maplibre-gl";
-import { registerAllRpgTextures } from "@/lib/radar/mapTextures";
+import {
+  registerAllRpgTextures,
+  syncRpgTreesOnMap,
+} from "@/lib/radar/mapTextures";
 
 // Active Map Visual Theme: 'rpg-16bit' (experimental textured pixel-art) vs 'cyberpunk-dark' (tactical dark theme)
 export const CURRENT_MAP_THEME: "rpg-16bit" | "cyberpunk-dark" = "rpg-16bit";
@@ -616,6 +619,9 @@ export function ArcadeMap({
     const applyArcade16BitPalette = () => {
       if (CURRENT_MAP_THEME === "rpg-16bit") {
         applyRpg16BitTheme(map);
+        try {
+          syncRpgTreesOnMap(map);
+        } catch {}
       } else {
         applyCyberpunkDarkTheme(map);
       }
@@ -641,6 +647,14 @@ export function ArcadeMap({
 
     map.on("style.load", applyArcade16BitPalette);
     map.on("load", applyArcade16BitPalette);
+
+    if (CURRENT_MAP_THEME === "rpg-16bit") {
+      map.on("moveend", () => {
+        try {
+          syncRpgTreesOnMap(map);
+        } catch {}
+      });
+    }
 
     if (mode === "admin-pin") {
       map.on("click", (ev: MapMouseEvent) => {
