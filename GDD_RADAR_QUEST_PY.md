@@ -252,18 +252,19 @@ Los navegadores modernos bloquean cualquier reproducción de audio automática p
 
 Todos los efectos de sonido (SFX) se sintetizan matemáticamente en tiempo de ejecución mediante osciladores nativos de `Web Audio API` con envolventes de caída exponencial (`exponentialRampToValueAtTime`), logrando **0 KB de peso adicional en red** y respuesta instantánea:
 
-| Evento / Estado | Forma de Onda | Secuencia de Frecuencias (Hz) / Notas | Patrón Háptico (`ms`) | Intención Psicoacústica |
+| Evento / Estado | Forma de Onda | Secuencia de Frecuencias (Hz) / Notas | Patrón Háptico (`ms`) | Intención Psicoacústica y Consumo Energético |
 | :--- | :---: | :--- | :--- | :--- |
-| **`FUERA DE ZONA`** | `triangle` | `165 Hz` (E3) | — | Tono grave hueco que comunica lejanía espacial. |
-| **`CONGELADO`** | `square` | `262 Hz` (C4) | `[30]` | Pulso corto cristalino con micro-toque táctil. |
-| **`TIBIO`** | `square` | `392 -> 440 Hz` (G4 - A4) | `[45, 60, 45]` | Intervalo de segunda mayor ascendente: señal de avance positivo. |
-| **`CALIENTE`** | `square` | `523.25 -> 659.25 -> 783.99 Hz` (C5 - E5 - G5) | `[70, 45, 90]` | Tríada mayor brillante con doble latido táctil fuerte. |
-| **`QUEMANDO`** | `square` | `784 -> 988 -> 1175 -> 1568 Hz` (G5 - B5 - D6 - G6) | `[120, 40, 120, 40, 180]` | Arpegio agudo de máxima urgencia + ráfaga táctil intensa. |
-| **`TELEPORT_ANOMALY`** | `sawtooth` | `220 -> 130 Hz` (A3 -> C3) | `[220, 80, 220]` | Caída áspera disonante de error/bloqueo de seguridad. |
-| **Peligro Rival (`<=65m`)** | `sawtooth` | `880 -> 587 -> 880 Hz` (A5 - D5 - A5) | `[150, 50, 150, 50, 150]` | Sirena de alarma táctica que corta la mezcla musical. |
-| **Power-Up Inicio** | `square` | `330 -> 440 -> 554 -> 659 Hz` (La Mayor) | `[50, 30, 80]` | Confirmación energética de conexión al sistema. |
-| **Fanfarria de Victoria** | `square` | `523.25 -> 659.25 -> 783.99 -> 1046.5 Hz` (C5 -> C6) | `[100, 40, 100, 40, 300]` | Clímax clásico arcade con octava superior sostenida (`260ms`). |
+| **`FUERA DE ZONA`** | `triangle` | `165 Hz` (E3) | Desactivado (0 ms) | Tono grave hueco que comunica lejanía espacial. |
+| **`CONGELADO`** | `square` | `262 Hz` (C4) | Desactivado (0 ms) | Pulso corto cristalino sonoro (vibración desactivada en pings rutinarios para ahorro crítico de batería). |
+| **`TIBIO`** | `square` | `392 -> 440 Hz` (G4 - A4) | Desactivado (0 ms) | Intervalo de segunda mayor ascendente sonoro sin vibración mecánica. |
+| **`CALIENTE`** | `square` | `523.25 -> 659.25 -> 783.99 Hz` (C5 - E5 - G5) | Desactivado (0 ms) | Tríada mayor brillante sonora sin drenaje por motor háptico. |
+| **`QUEMANDO`** | `square` | `784 -> 988 -> 1175 -> 1568 Hz` (G5 - B5 - D6 - G6) | Desactivado (0 ms) | Arpegio agudo de máxima urgencia sonora sin vibración rítmica en pings. |
+| **`TELEPORT_ANOMALY`** | `sawtooth` | `220 -> 130 Hz` (A3 -> C3) | Desactivado (0 ms) | Caída áspera disonante de error/bloqueo de seguridad. |
+| **Peligro Rival (`<=65m`)** | `sawtooth` | `880 -> 587 -> 880 Hz` (A5 - D5 - A5) | `[150, 50, 150, 50, 150]` | Sirena de alarma táctica que corta la mezcla musical con háptico de emergencia. |
+| **Power-Up Inicio** | `square` | `330 -> 440 -> 554 -> 659 Hz` (La Mayor) | `[50, 30, 80]` | Confirmación energética única de conexión al sistema. |
+| **Fanfarria de Victoria** | `square` | `523.25 -> 659.25 -> 783.99 -> 1046.5 Hz` (C5 -> C6) | `[100, 40, 100, 40, 300]` | Clímax clásico arcade con octava superior y ráfaga háptica triunfal. |
 | **Frizado / Escarcha** | `sfx_freeze.mp3` | Viento gélido + crujido de hielo + shimmer FM | `[40, 30, 60]` | Evento estocástico al congelarse el cazador en `CONGELADO`/`FUERA DE ZONA`. |
+| **Escaneo QR Exitoso** | Chiptune synth | Tono confirmatorio de validación de tesoro | `[80, 40, 80]` | Confirmación háptica y visual instantánea al capturar el objetivo. |
 
 ---
 

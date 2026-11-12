@@ -327,7 +327,7 @@ class ArcadeHardwareController {
   }
 
   /**
-   * Triggers thermal radar sonar audio + native vibration pattern.
+   * Triggers thermal radar sonar audio feedback (vibration disabled on routine pings to conserve battery).
    */
   public triggerThermalFeedback(state: ThermalState) {
     switch (state) {
@@ -338,14 +338,12 @@ class ArcadeHardwareController {
         this.playNotes([
           { freq: 262, duration: 0.09, type: "square", gain: 0.04 },
         ]);
-        this.vibrate([30]);
         break;
       case "TIBIO":
         this.playNotes([
           { freq: 392, duration: 0.08, type: "square", gain: 0.05 },
           { freq: 440, duration: 0.08, type: "square", gain: 0.05 },
         ]);
-        this.vibrate([45, 60, 45]);
         break;
       case "CALIENTE":
         this.playNotes([
@@ -353,7 +351,6 @@ class ArcadeHardwareController {
           { freq: 659.25, duration: 0.07, type: "square", gain: 0.06 },
           { freq: 783.99, duration: 0.09, type: "square", gain: 0.06 },
         ]);
-        this.vibrate([70, 45, 90]);
         break;
       case "QUEMANDO":
         this.playNotes([
@@ -362,14 +359,12 @@ class ArcadeHardwareController {
           { freq: 1175, duration: 0.07, type: "square", gain: 0.08 },
           { freq: 1568, duration: 0.12, type: "square", gain: 0.09 },
         ]);
-        this.vibrate([120, 40, 120, 40, 180]);
         break;
       case "TELEPORT_ANOMALY":
         this.playNotes([
           { freq: 220, duration: 0.12, type: "sawtooth", gain: 0.08 },
           { freq: 130, duration: 0.22, type: "sawtooth", gain: 0.08 },
         ]);
-        this.vibrate([220, 80, 220]);
         break;
     }
   }
