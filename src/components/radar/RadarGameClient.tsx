@@ -980,17 +980,6 @@ export function RadarGameClient({
                       {selectedMission.prizeTitle}
                     </span>
                   </span>
-                  <span
-                    className={`px-1.5 py-0.5 rounded font-mono font-bold shrink-0 ${
-                      pingData?.proofOfHuntProgress?.ready
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/50"
-                        : "bg-slate-800 text-slate-300"
-                    }`}
-                  >
-                    Rastreo:{" "}
-                    {pingData?.proofOfHuntProgress?.currentValidPings ?? 0}/
-                    {selectedMission.minPingsForMajorPrize}
-                  </span>
                 </div>
                 <p className="text-[11px] text-slate-300 leading-snug">
                   <strong className="text-cyan-300">Pista:</strong>{" "}
