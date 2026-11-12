@@ -277,11 +277,11 @@ export function RadarCanvasOverlay({
     let tick = 0;
     const particles: FireParticle[] = [];
 
-    // Estado del ciclo estocástico de frizado por frío
+    // Estado del ciclo estocástico de frizado por frío (espaciado generoso para evitar fatiga)
     let freezeState: "NORMAL" | "FROZEN" = "NORMAL";
     let freezeStartTick = 0;
-    let freezeDurationTicks = 130;
-    let nextFreezeIntervalTicks = 130; // Primer congelamiento ocurre a los ~2 segundos de entrar
+    let freezeDurationTicks = 100;
+    let nextFreezeIntervalTicks = 900; // Primer congelamiento ocurre tras ~15 segundos de exploración en frío
     let lastCycleEndTick = 0;
     let frozenFrameIdx = 0;
 
@@ -311,8 +311,8 @@ export function RadarCanvasOverlay({
           if (tick - lastCycleEndTick >= nextFreezeIntervalTicks) {
             freezeState = "FROZEN";
             freezeStartTick = tick;
-            // Duración aleatoria del frizado: 1.8s a 2.5s (110 a 150 frames a 60fps)
-            freezeDurationTicks = Math.floor(110 + Math.random() * 40);
+            // Duración del frizado: 1.5s a 2.0s (90 a 120 frames a 60fps)
+            freezeDurationTicks = Math.floor(90 + Math.random() * 30);
             frozenFrameIdx = Math.floor(tick / 6) % 9;
             arcadeHardware.playFreezeSound();
           }
@@ -320,8 +320,8 @@ export function RadarCanvasOverlay({
           if (tick - freezeStartTick >= freezeDurationTicks) {
             freezeState = "NORMAL";
             lastCycleEndTick = tick;
-            // Próximo ciclo en intervalo aleatorio entre 6s y 13s (360 a 780 frames)
-            nextFreezeIntervalTicks = Math.floor(360 + Math.random() * 420);
+            // Próximo ciclo en intervalo mucho más espaciado: entre 30s y 65s (1.800 a 3.900 frames a 60fps)
+            nextFreezeIntervalTicks = Math.floor(1800 + Math.random() * 2100);
 
             // Explosión de esquirlas de hielo en abanico al descongelarse
             for (let k = 0; k < 14; k++) {
@@ -344,8 +344,9 @@ export function RadarCanvasOverlay({
         if (freezeState === "FROZEN") {
           freezeState = "NORMAL";
           lastCycleEndTick = tick;
-          nextFreezeIntervalTicks = 180;
         }
+        // Al salir y volver a entrar a zona fría, esperar al menos 30s a 50s
+        nextFreezeIntervalTicks = Math.floor(1800 + Math.random() * 1200);
       }
 
       ctx.imageSmoothingEnabled = false;
