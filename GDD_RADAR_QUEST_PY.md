@@ -24,7 +24,7 @@ En lugar de mostrar un marcador de destino tradicional, el jugador navega el ent
 | Capa del Sistema | Tecnología / Implementación | Propósito en el Videojuego |
 | :--- | :--- | :--- |
 | **Core Runtime** | Next.js 16.4 (Turbopack), React 19.3, TypeScript | Orquestación cliente-servidor, rutas dinámicas multi-marca (`/b/[brand]`) y APIs de baja latencia. |
-| **Motor Cartográfico** | MapLibre GL JS 6.16 + Web Workers dedicados | Renderizado vectorial WebGL reprogramado en caliente con paleta cyberpunk de alto contraste y cámara inclinada (`pitch: 22°`). |
+| **Motor Cartográfico** | MapLibre GL JS 6.16 + Web Workers dedicados | Renderizado vectorial WebGL reprogramado en caliente con estética RPG 16-bit (césped verde vibrante, calles empedradas y casitas modernas con relieve 2.5D) y cámara inclinada (`pitch: 22°`). |
 | **Motor Gráfico 2D / VFX** | HTML5 `<canvas>` (`360x640` lógico, `pixelated`) | Loop independiente a **60 FPS** (`requestAnimationFrame`) para spritesheets, ondas Bresenham, fuego, congelamiento estocástico y partículas. |
 | **Audio & Síntesis** | Web Audio API + Tri-Stem Adaptive BGM | Sintetizador chiptune procedimental (`square`, `triangle`, `sawtooth`) + crossfade dinámico de 3 capas Synthwave (`100` / `110` / `120 BPM`). |
 | ** Sensores Físicos** | Geolocation API, Screen Wake Lock, Vibration API | Rastreo Haversine de alta precisión, pantalla siempre activa en caminata y feedback háptico rítmico. |
@@ -165,16 +165,24 @@ Toda la interfaz gráfica (HUD en vivo, preloader, modales de registro, escáner
 En lugar de utilizar un mapa comercial genérico que rompería la inmersión del videojuego, `ArcadeMap` intercepta el árbol de capas vectoriales de MapLibre al cargar el estilo y ejecuta un *shader/paint pass* completo:
 
 * **Limpieza Quirúrgica anti-distracción:** Oculta dinámicamente todos los puntos de interés comerciales ajenos (`poi`, `aeroway`, `housenumber`), dejando únicamente la geometría urbana y los nombres de calles con texto blanco puro y halo negro de `2.2px` para orientación inmediata al caminar.
-* **Jerarquía Cromática Cyberpunk Táctica:**
-  * *Fondo Urbano / Manzanas Generales:* Azul Noche Pizarra Profundo (`#080d1a` / `#0f172a`), evitando inundar la ciudad de verde artificial.
-  * *Rutas y Autopistas:* Ámbar Neón (`#f59e0b`)
-  * *Avenidas Primarias:* Dorado Cálido (`#fbbf24`)
-  * *Arterias Secundarias:* Naranja Neón (`#fb923c`)
-  * *Calles Residenciales:* Cian Táctico Refinado (`#38bdf8` a 82% opacidad)
-  * *Parques y Plazas Reales:* Verde Esmeralda Bosque Oscuro (`#065f46`), contrastando como oasis sobre el chasis urbano.
-  * *Ríos y Cuerpos de Agua:* Azul Cobalto Profundo (`#0284c7`) con costas iluminadas (`#38bdf8`)
-  * *Edificios y Manzanas (16-Bit Multicolor):* Distribución cromática pseudoaleatoria determinista en 6 tonos cyberpunk (*Violeta `#341c54`, Turquesa `#113e47`, Índigo `#1a2e56`, Cobre `#442a19`, Magenta `#3e162e` y Grafito `#212b3d`*) con contornos neón vectoriales y relieve 2.5D diferenciado en capas base y techo.
-  * *Textura CRT:* Scanlines cinematográficas sutiles (`opacity: 0.18`), aportando grano analógico sin opacar la legibilidad del mapa.
+* **Jerarquía Cromática RPG 16-Bit con Casitas Modernas:**
+  * *Fondo y Terreno General:* Césped verde vibrante 16-bit (`#5eb83a` / `#65be41`), evocando el estilo nostálgico de clásicos retro (Zelda / Pokémon SNES).
+  * *Parques, Plazas y Arboledas:* Verde bosque denso (`#3e8c24`), aportando riqueza visual y contraste natural.
+  * *Ríos, Lagos y Bahías:* Celeste cristalino RPG (`#4ebaf7`) con orillas y cauces delimitados en azul profundo (`#2582bf`).
+  * *Red de Calles y Senderos:*
+    * *Senderos Peatonales y Pasajes de Parque:* Tierra y adoquín claro (`#c49c66`, cordón `#5c3d22`).
+    * *Calles Residenciales / Barriales:* Pavimento urbano gris claro / empedrado (`#8c96a3`, cordón cuneta `#4a5563`).
+    * *Avenidas Secundarias y Primarias:* Asfalto urbano (`#56606f` / `#434c58`, cordón `#334155`).
+    * *Autopistas y Rutas Rápidas:* Asfalto carbón (`#2b323c`, cordón `#1e293b`).
+  * *Casitas y Edificios Modernos (Arquitectura 2.5D en 6 Estilos Contemporáneos):*
+    1. *Minimalista Blanco Hormigón:* Techo `#e8ecf2`, fachada pared `#475569`.
+    2. *Pizarra Antracita / Techo Plano:* Techo `#334155`, fachada pared `#1e293b`.
+    3. *Terraza Deck de Madera Teca:* Techo `#bf8a58`, fachada pared `#5c3d22`.
+    4. *Azul Acero Vidrio Solar Templado:* Techo `#2d6391`, fachada pared `#17334d`.
+    5. *Azotea Verde Sustentable (Rooftop Garden):* Techo `#4d8024`, fachada pared `#27420f`.
+    6. *Caliza Arena Contemporánea:* Techo `#d8c8b2`, fachada pared `#6b5945`.
+    * *Relieve y Contornos:* Desplazamiento isométrico de techo `fill-translate: [-2.5, -2.5]` proyectando la pared frontal inferior y contornos nítidos estilo dibujo animado / pixel-art.
+  * *Textura CRT:* Scanlines analógicas sutiles (`opacity: 0.18`), integrando el estilo visual arcade.
 
 ---
 

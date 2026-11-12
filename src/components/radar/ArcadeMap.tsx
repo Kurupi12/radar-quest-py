@@ -257,19 +257,19 @@ export function ArcadeMap({
           continue;
         }
 
-        // 2. High-Contrast Multicolor Geographical Elements (Tactical Dark Cyberpunk Palette)
+        // 2. Fondo del Mundo RPG 16-Bit: Césped Verde Vibrante (Estilo Pokémon / Zelda SNES)
         if (layer.type === "background") {
           try {
-            map.setPaintProperty(layer.id, "background-color", "#080d1a");
+            map.setPaintProperty(layer.id, "background-color", "#5eb83a");
           } catch {}
         }
 
         if (layer.type === "fill") {
           if (id.includes("water")) {
-            // Rivers, Lakes & Bays: Electric Cobalt / Deep Cyan
+            // Ríos, Lagos y Bahías: Celeste Cristalino RPG
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#0284c7");
-              map.setPaintProperty(layer.id, "fill-opacity", 0.9);
+              map.setPaintProperty(layer.id, "fill-color", "#4ebaf7");
+              map.setPaintProperty(layer.id, "fill-opacity", 0.95);
             } catch {}
           } else if (
             id.includes("park") ||
@@ -281,10 +281,10 @@ export function ArcadeMap({
             id.includes("leisure") ||
             id.includes("recreation")
           ) {
-            // Authentic Green Spaces (Parks, Plazas & Sports Grounds): Deep Cyber Emerald
+            // Parques, Plazas y Arboledas: Verde Bosque Denso 16-Bit
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#065f46");
-              map.setPaintProperty(layer.id, "fill-opacity", 0.85);
+              map.setPaintProperty(layer.id, "fill-color", "#3e8c24");
+              map.setPaintProperty(layer.id, "fill-opacity", 0.95);
             } catch {}
           } else if (
             id.includes("landuse") ||
@@ -293,56 +293,96 @@ export function ArcadeMap({
             id.includes("commercial") ||
             id.includes("industrial")
           ) {
-            // Urban Blocks & Zoned Ground: Subtle Dark Slate (prevents green flood over entire city)
+            // Manzanas y Parcelas Urbanas: Césped barrial vivo o plaza cálida
+            const isCommercial =
+              id.includes("commercial") || id.includes("industrial");
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#0f172a");
-              map.setPaintProperty(layer.id, "fill-opacity", 0.75);
+              map.setPaintProperty(
+                layer.id,
+                "fill-color",
+                isCommercial ? "#85929e" : "#65be41"
+              );
+              map.setPaintProperty(
+                layer.id,
+                "fill-opacity",
+                isCommercial ? 0.35 : 0.88
+              );
             } catch {}
           } else if (id.includes("building")) {
-            // Multi-Hue 16-Bit Cyberpunk Buildings: Deterministic Pseudo-Random Color Distribution
+            // CASITAS Y EDIFICIOS MODERNOS 16-BIT (Arquitectura Contemporánea con relieve 2.5D)
             const isTopLayer = id.includes("top");
-            const buildingColorExpr = [
+
+            // Techos y Terrazas de Casas Modernas (capa 'building-top')
+            // 0: Minimalista Blanco Hormigón
+            // 1: Pizarra Antracita / Techo Plano Moderno
+            // 2: Terraza con Deck de Madera Teca Cálida
+            // 3: Azul Acero Vidrio Solar Templado
+            // 4: Azotea Verde Sustentable (Rooftop Garden)
+            // 5: Cemento y Estuco Caliza Contemporáneo
+            const modernRoofColors = [
               "match",
               ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
-              0, isTopLayer ? "#341c54" : "#1a0f2b", // Cyberpunk Violet
-              1, isTopLayer ? "#113e47" : "#0a2228", // Neon Dark Teal
-              2, isTopLayer ? "#1a2e56" : "#0d182e", // Tactical Mecha Indigo
-              3, isTopLayer ? "#442a19" : "#24160c", // Industrial Amber Copper
-              4, isTopLayer ? "#3e162e" : "#220b19", // Dark Synth Magenta
-              5, isTopLayer ? "#212b3d" : "#101620", // Slate Steel Graphite
-              "#1e293b",
+              0, "#e8ecf2", // Blanco Hormigón Minimalista
+              1, "#334155", // Pizarra Antracita
+              2, "#bf8a58", // Terraza Deck Madera Teca
+              3, "#2d6391", // Azul Acero Vidrio Templado
+              4, "#4d8024", // Azotea Verde Ecológica
+              5, "#d8c8b2", // Caliza Arena Contemporánea
+              "#cbd5e1",
             ];
 
-            const buildingOutlineExpr = [
+            // Fachadas y Paredes 2.5D de Casas Modernas (capa base 'building')
+            const modernWallColors = [
               "match",
               ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
-              0, "#7c3aed",
-              1, "#06b6d4",
-              2, "#3b82f6",
-              3, "#f59e0b",
-              4, "#ec4899",
-              5, "#64748b",
+              0, "#475569", // Pared cemento visto
+              1, "#1e293b", // Pared grafito oscuro
+              2, "#5c3d22", // Pared madera oscura
+              3, "#17334d", // Pared azul noche
+              4, "#27420f", // Pared piedra ecológica
+              5, "#6b5945", // Pared piedra caliza
               "#334155",
             ];
 
+            // Contorno nítido pixel-art estilo cómic / videojuego japonés
+            const modernOutlineColors = [
+              "match",
+              ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
+              0, "#334155",
+              1, "#0f172a",
+              2, "#3b2513",
+              3, "#0c1d2e",
+              4, "#142406",
+              5, "#3b3024",
+              "#1e293b",
+            ];
+
             try {
-              map.setPaintProperty(layer.id, "fill-color", buildingColorExpr as any);
+              map.setPaintProperty(
+                layer.id,
+                "fill-color",
+                (isTopLayer ? modernRoofColors : modernWallColors) as any
+              );
               map.setPaintProperty(
                 layer.id,
                 "fill-outline-color",
-                buildingOutlineExpr as any
+                modernOutlineColors as any
               );
-              map.setPaintProperty(layer.id, "fill-opacity", 0.95);
+              map.setPaintProperty(layer.id, "fill-opacity", 0.98);
+              if (isTopLayer) {
+                map.setPaintProperty(layer.id, "fill-translate", [-2.5, -2.5]);
+              }
             } catch {}
           }
         }
 
-        // 3. High-Contrast Vivid Street Network
+        // 3. Red de Calles y Senderos RPG 16-Bit
         if (layer.type === "line") {
           if (id.includes("water")) {
+            // Orillas y cauces de agua delimitados con azul profundo
             try {
-              map.setPaintProperty(layer.id, "line-color", "#38bdf8");
-              map.setPaintProperty(layer.id, "line-width", 2);
+              map.setPaintProperty(layer.id, "line-color", "#2582bf");
+              map.setPaintProperty(layer.id, "line-width", 2.2);
             } catch {}
           } else if (
             id.includes("road") ||
@@ -360,44 +400,62 @@ export function ArcadeMap({
               id.includes("primary") || id.includes("_pri_");
             const isSecondary =
               id.includes("secondary") || id.includes("_sec_");
+            const isPath =
+              id.includes("path") ||
+              id.includes("pedestrian") ||
+              id.includes("footway");
             const isCasing = id.includes("case") || id.includes("casing");
 
-            // Major Avenues: Amber Neon (#f59e0b)
-            // Secondary Arteries: Warm Orange (#fb923c)
-            // Residential Streets: Refined Tactical Cyan (#38bdf8)
-            const streetColor = isHighSpeed
-              ? "#f59e0b"
+            // Paleta de Calles RPG:
+            // - Caminos peatonales / senderos de parque: Tierra / adoquín claro (#c49c66)
+            // - Calles residenciales / barriales: Pavimento gris urbano claro / empedrado (#8c96a3)
+            // - Avenidas secundarias: Asfalto gris (#56606f)
+            // - Avenidas principales: Asfalto oscuro (#434c58)
+            // - Autopistas / rutas: Asfalto carbón (#2b323c)
+            const streetColor = isPath
+              ? "#c49c66"
+              : isHighSpeed
+              ? "#2b323c"
               : isPrimary
-              ? "#fbbf24"
+              ? "#434c58"
               : isSecondary
-              ? "#fb923c"
-              : "#38bdf8";
+              ? "#56606f"
+              : "#8c96a3";
+
+            // Cordón cuneta y bordes definidos de calle estilo 16-bit
+            const casingColor = isPath
+              ? "#5c3d22"
+              : isHighSpeed
+              ? "#1e293b"
+              : isPrimary
+              ? "#334155"
+              : "#4a5563";
 
             try {
               map.setPaintProperty(
                 layer.id,
                 "line-color",
-                isCasing ? "#020617" : streetColor
+                isCasing ? casingColor : streetColor
               );
               map.setPaintProperty(
                 layer.id,
                 "line-opacity",
-                isCasing ? 0.95 : isHighSpeed || isPrimary ? 1.0 : 0.82
+                isCasing ? 0.95 : 1.0
               );
             } catch {}
           } else if (id.includes("boundary")) {
             try {
-              map.setPaintProperty(layer.id, "line-color", "#f43f5e");
+              map.setPaintProperty(layer.id, "line-color", "#ea580c");
             } catch {}
           }
         }
 
-        // 4. Crisp High-Legibility Street & Place Labels
+        // 4. Tipografía y Rótulos de Calles de Alta Legibilidad sobre mapa RPG
         if (layer.type === "symbol") {
           try {
             map.setPaintProperty(layer.id, "text-color", "#ffffff");
-            map.setPaintProperty(layer.id, "text-halo-color", "#020617");
-            map.setPaintProperty(layer.id, "text-halo-width", 2.2);
+            map.setPaintProperty(layer.id, "text-halo-color", "#0f172a");
+            map.setPaintProperty(layer.id, "text-halo-width", 2.6);
           } catch {}
         }
       }
