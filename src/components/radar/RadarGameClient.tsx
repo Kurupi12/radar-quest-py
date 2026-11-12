@@ -797,6 +797,8 @@ export function RadarGameClient({
             thermalState={currentThermal}
             inVehicleMode={Boolean(pingData?.inVehicleMode)}
             dangerAlertActive={Boolean(pingData?.dangerAlert?.active)}
+            speedKmh={pingData?.speedKmh ?? 0}
+            coords={coords}
             primaryColor={brand.primaryColor}
             secondaryColor={brand.secondaryColor}
             active={preloaderDismissed}

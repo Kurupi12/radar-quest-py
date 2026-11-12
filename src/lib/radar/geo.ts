@@ -209,3 +209,35 @@ export function isValidLatLng(lat: number, lng: number): boolean {
   );
 }
 
+export type CardinalDirection4 = "north" | "east" | "south" | "west";
+
+/**
+ * Calculates initial bearing in degrees (0..360, where 0=North, 90=East, 180=South, 270=West)
+ */
+export function calculateBearingDegrees(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+
+  const y = Math.sin(dLng) * Math.cos(phi2);
+  const x =
+    Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLng);
+
+  let brng = (Math.atan2(y, x) * 180) / Math.PI;
+  return (brng + 360) % 360;
+}
+
+export function getCardinalDirection4(bearingDeg: number): CardinalDirection4 {
+  const normalized = ((bearingDeg % 360) + 360) % 360;
+  if (normalized >= 45 && normalized < 135) return "east";
+  if (normalized >= 135 && normalized < 225) return "south";
+  if (normalized >= 225 && normalized < 315) return "west";
+  return "north";
+}
+

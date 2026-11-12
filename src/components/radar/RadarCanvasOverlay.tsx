@@ -3,6 +3,12 @@
 import { useEffect, useRef } from "react";
 import type { ThermalState } from "@/types/radar";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
+import {
+  calculateBearingDegrees,
+  getCardinalDirection4,
+  calculateHaversineMeters,
+  type CardinalDirection4,
+} from "@/lib/radar/geo";
 
 interface FireParticle {
   x: number;
@@ -19,6 +25,8 @@ interface RadarCanvasOverlayProps {
   thermalState: ThermalState;
   inVehicleMode: boolean;
   dangerAlertActive: boolean;
+  speedKmh?: number;
+  coords?: { lat: number; lng: number };
   primaryColor?: string;
   secondaryColor?: string;
   active?: boolean;
@@ -204,6 +212,8 @@ export function RadarCanvasOverlay({
   thermalState,
   inVehicleMode,
   dangerAlertActive,
+  speedKmh = 0,
+  coords,
   primaryColor = "#a855f7",
   secondaryColor = "#00f0ff",
   active = true,
@@ -212,6 +222,12 @@ export function RadarCanvasOverlay({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const walkImagesRef = useRef<HTMLImageElement[]>([]);
   const jumpImagesRef = useRef<HTMLImageElement[]>([]);
+  const directionalImagesRef = useRef<{
+    south: HTMLImageElement | null;
+    north: HTMLImageElement | null;
+    east: HTMLImageElement | null;
+    west: HTMLImageElement | null;
+  }>({ south: null, north: null, east: null, west: null });
   const flamesImgRef = useRef<HTMLImageElement | null>(null);
   const onCanvasReadyRef = useRef(onCanvasReady);
 
@@ -223,12 +239,14 @@ export function RadarCanvasOverlay({
     thermalState,
     inVehicleMode,
     dangerAlertActive,
+    speedKmh,
+    coords,
     primaryColor,
     secondaryColor,
     active,
   });
 
-  // Preload PixelLab walk & jump celebration animation frames & thermal flames spritesheet
+  // Preload PixelLab walk & jump celebration animation frames, directional idle poses & thermal flames spritesheet
   useEffect(() => {
     const walkImages: HTMLImageElement[] = [];
     for (let i = 0; i < 9; i++) {
@@ -246,6 +264,18 @@ export function RadarCanvasOverlay({
     }
     jumpImagesRef.current = jumpImages;
 
+    const loadImg = (src: string) => {
+      const img = new Image();
+      img.src = src;
+      return img;
+    };
+    directionalImagesRef.current = {
+      south: loadImg("/sprites/hunter_south.png"),
+      north: loadImg("/sprites/hunter_north.png"),
+      east: loadImg("/sprites/hunter_east.png"),
+      west: loadImg("/sprites/hunter_west.png"),
+    };
+
     const flamesImg = new Image();
     flamesImg.src = "/sprites/flames/flames_sheet.png";
     flamesImgRef.current = flamesImg;
@@ -255,6 +285,8 @@ export function RadarCanvasOverlay({
     thermalState,
     inVehicleMode,
     dangerAlertActive,
+    speedKmh,
+    coords,
     primaryColor,
     secondaryColor,
     active,
@@ -275,6 +307,9 @@ export function RadarCanvasOverlay({
     let animId = 0;
     let wavePhase = 0;
     let tick = 0;
+    let walkStepPhase = 0;
+    let facingDirection: CardinalDirection4 = "south";
+    let lastCoords = { lat: 0, lng: 0 };
     const particles: FireParticle[] = [];
 
     // Estado del ciclo estocástico de frizado por frío (espaciado generoso para evitar fatiga)
@@ -291,6 +326,8 @@ export function RadarCanvasOverlay({
         thermalState: currentThermal,
         inVehicleMode: vehicle,
         dangerAlertActive: danger,
+        speedKmh: currentSpeedKmh,
+        coords: currentCoords,
         primaryColor: pColor,
         secondaryColor: sColor,
         active: isOverlayActive,
@@ -298,6 +335,43 @@ export function RadarCanvasOverlay({
 
       const cx = LOGICAL_WIDTH / 2;
       const cy = LOGICAL_HEIGHT / 2;
+
+      // Detección de rumbo y orientación 4D del cazador a partir del movimiento GPS
+      if (currentCoords && currentCoords.lat && currentCoords.lng) {
+        if (lastCoords.lat === 0 && lastCoords.lng === 0) {
+          lastCoords = { lat: currentCoords.lat, lng: currentCoords.lng };
+        } else {
+          const distMoved = calculateHaversineMeters(
+            lastCoords.lat,
+            lastCoords.lng,
+            currentCoords.lat,
+            currentCoords.lng
+          );
+          // Si el jugador se desplazó al menos 1.5 metros, actualizamos su rumbo cardinal
+          if (distMoved >= 1.5) {
+            const bearing = calculateBearingDegrees(
+              lastCoords.lat,
+              lastCoords.lng,
+              currentCoords.lat,
+              currentCoords.lng
+            );
+            facingDirection = getCardinalDirection4(bearing);
+            lastCoords = { lat: currentCoords.lat, lng: currentCoords.lng };
+          }
+        }
+      }
+
+      // Estado de movimiento real (caminando vs parado)
+      const isMoving = (currentSpeedKmh ?? 0) >= 1.4 && !vehicle;
+      if (isMoving) {
+        const speedFactor = Math.min(
+          Math.max((currentSpeedKmh || 3) / 3.6, 0.6),
+          2.2
+        );
+        walkStepPhase += 0.14 * speedFactor;
+      } else {
+        walkStepPhase = 0;
+      }
 
       // Se considera estado frío tanto en CONGELADO como en FUERA DE ZONA (lejanía del tesoro)
       // Sólo se activa si el overlay está activo (el jugador ya superó el preloader de inicio)
@@ -460,35 +534,23 @@ export function RadarCanvasOverlay({
         }
       }
 
-      // 4. Draw 16-bit Hunter Sprite (Jump Celebration when QUEMANDO, Walk otherwise, Frozen Shiver, or Cyber Car)
+      // 4. Draw 16-bit Hunter Sprite (Jump Celebration when QUEMANDO, Walk when moving, Idle when stopped, Frozen Shiver, or Cyber Car)
       const isBurning = currentThermal === "QUEMANDO";
       const isFrozen = freezeState === "FROZEN";
-
-      const spriteList = isBurning
-        ? jumpImagesRef.current
-        : walkImagesRef.current;
-      const animSpeed = isBurning ? 5 : 6;
-
-      // Si está frizado, se detiene en el frame congelado; si no, avanza en bucle
-      const currentIdx = isBurning
-        ? Math.floor(tick / animSpeed) % (spriteList.length || 9)
-        : isFrozen
-        ? frozenFrameIdx
-        : Math.floor(tick / animSpeed) % (spriteList.length || 9);
-
-      const spriteImg = spriteList[currentIdx];
 
       // Temblor involuntario de frío a alta frecuencia (shiver de 1-2px)
       const shiverX = isFrozen ? (tick % 4 < 2 ? 1 : -1) : 0;
       const shiverY = isFrozen ? (tick % 6 < 3 ? 0 : 1) : 0;
 
-      if (!vehicle && spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
+      if (!vehicle) {
         const drawSize = isBurning ? 48 : 46;
-        // Ground shadow (reacts dynamically to vertical jump phase)
+        // Ground shadow (reacts dynamically to vertical jump phase, step or idle)
         const shadowScale = isBurning
           ? 0.75 + Math.sin(tick * 0.25) * 0.25
           : isFrozen
           ? 0.95
+          : isMoving
+          ? 0.92 + Math.sin(walkStepPhase * Math.PI) * 0.08
           : 1;
 
         ctx.fillStyle = "rgba(10, 4, 24, 0.72)";
@@ -499,14 +561,70 @@ export function RadarCanvasOverlay({
           5
         );
 
-        // Render PixelLab 16-bit animated hunter (con temblor si está frizado)
-        ctx.drawImage(
-          spriteImg,
-          Math.round(cx - drawSize / 2 + shiverX),
-          Math.round(cy - drawSize / 2 - 1 + shiverY),
-          drawSize,
-          drawSize
-        );
+        const targetX = Math.round(cx - drawSize / 2 + shiverX);
+        const targetY = Math.round(cy - drawSize / 2 - 1 + shiverY);
+
+        if (isBurning) {
+          // Celebración por cercanía crítica al tesoro
+          const jumpList = jumpImagesRef.current;
+          const jumpIdx = Math.floor(tick / 5) % (jumpList.length || 9);
+          const jumpImg = jumpList[jumpIdx];
+          if (jumpImg && jumpImg.complete && jumpImg.naturalWidth > 0) {
+            ctx.drawImage(jumpImg, targetX, targetY, drawSize, drawSize);
+          }
+        } else if (isMoving) {
+          // ESTADO: CAMINANDO (animación de pasos activa con cadencia según velocidad)
+          const walkList = walkImagesRef.current;
+          const walkFrame = Math.floor(walkStepPhase) % (walkList.length || 9);
+          const stepBob = Math.sin(walkStepPhase * Math.PI * 2) > 0 ? -1 : 0;
+
+          if (facingDirection === "south") {
+            const walkImg = walkList[walkFrame];
+            if (walkImg && walkImg.complete && walkImg.naturalWidth > 0) {
+              ctx.drawImage(walkImg, targetX, targetY, drawSize, drawSize);
+            }
+          } else if (facingDirection === "west") {
+            const westImg = directionalImagesRef.current.west;
+            if (westImg && westImg.complete && westImg.naturalWidth > 0) {
+              ctx.drawImage(westImg, targetX, targetY + stepBob, drawSize, drawSize);
+            } else {
+              const walkImg = walkList[walkFrame];
+              if (walkImg && walkImg.complete && walkImg.naturalWidth > 0) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.scale(-1, 1);
+                ctx.drawImage(walkImg, -drawSize / 2, -drawSize / 2 - 1, drawSize, drawSize);
+                ctx.restore();
+              }
+            }
+          } else if (facingDirection === "east") {
+            const eastImg = directionalImagesRef.current.east;
+            if (eastImg && eastImg.complete && eastImg.naturalWidth > 0) {
+              ctx.drawImage(eastImg, targetX, targetY + stepBob, drawSize, drawSize);
+            }
+          } else {
+            // north
+            const northImg = directionalImagesRef.current.north;
+            if (northImg && northImg.complete && northImg.naturalWidth > 0) {
+              ctx.drawImage(northImg, targetX, targetY + stepBob, drawSize, drawSize);
+            }
+          }
+        } else {
+          // ESTADO: QUIETO (IDLE) - Pies firmes en el suelo, micro-respiración orgánica
+          const idleBob = Math.sin(tick * 0.08) > 0.65 ? -1 : 0;
+          const idleImg =
+            directionalImagesRef.current[facingDirection] ||
+            directionalImagesRef.current.south;
+
+          if (idleImg && idleImg.complete && idleImg.naturalWidth > 0) {
+            ctx.drawImage(idleImg, targetX, targetY + idleBob, drawSize, drawSize);
+          } else {
+            const defaultImg = walkImagesRef.current[0];
+            if (defaultImg && defaultImg.complete && defaultImg.naturalWidth > 0) {
+              ctx.drawImage(defaultImg, targetX, targetY + idleBob, drawSize, drawSize);
+            }
+          }
+        }
 
         // EFECTO VISUAL: BLOQUE DE HIELO TRANSLÚCIDO 16-BIT & ALIENTO GÉLIDO
         if (isFrozen) {
