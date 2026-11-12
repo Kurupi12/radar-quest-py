@@ -878,8 +878,12 @@ export function persistDb(db: DatabaseSchema = getDb()): void {
 export async function findBrandBySlug(slug: string): Promise<Brand | null> {
   const clean = slug.trim().toLowerCase();
   if (isCloudDbEnabled()) {
-    const row = await getPrisma().brand.findUnique({ where: { slug: clean } });
-    return row ? mapPrismaBrand(row) : null;
+    try {
+      const row = await getPrisma().brand.findUnique({ where: { slug: clean } });
+      return row ? mapPrismaBrand(row) : null;
+    } catch (err) {
+      console.warn("[Store] Prisma findBrandBySlug error, falling back to local DB:", err);
+    }
   }
   const db = getDb();
   return db.brands.find((b) => b.slug.toLowerCase() === clean) || null;
@@ -894,30 +898,34 @@ export async function listActiveBrandsWithPublicMissions(): Promise<
   }>
 > {
   if (isCloudDbEnabled()) {
-    const rows = await getPrisma().brand.findMany({
-      where: { active: true },
-      include: {
-        missions: {
-          where: { status: { not: "DRAFT" } },
-          orderBy: { createdAt: "desc" },
+    try {
+      const rows = await getPrisma().brand.findMany({
+        where: { active: true },
+        include: {
+          missions: {
+            where: { status: { not: "DRAFT" } },
+            orderBy: { createdAt: "desc" },
+          },
         },
-      },
-      orderBy: { createdAt: "asc" },
-    });
+        orderBy: { createdAt: "asc" },
+      });
 
-    return rows.map((r) => {
-      const brand = toPublicBrand(mapPrismaBrand(r));
-      const missions = r.missions.map((m) =>
-        toPublicMission(mapPrismaMission(m))
-      );
-      return {
-        brand,
-        missionsCount: missions.length,
-        activeMissionsCount: missions.filter((m) => m.status === "ACTIVE")
-          .length,
-        missions,
-      };
-    });
+      return rows.map((r) => {
+        const brand = toPublicBrand(mapPrismaBrand(r));
+        const missions = r.missions.map((m) =>
+          toPublicMission(mapPrismaMission(m))
+        );
+        return {
+          brand,
+          missionsCount: missions.length,
+          activeMissionsCount: missions.filter((m) => m.status === "ACTIVE")
+            .length,
+          missions,
+        };
+      });
+    } catch (err) {
+      console.warn("[Store] Prisma listActiveBrands error, falling back to local DB:", err);
+    }
   }
 
   const db = getDb();
@@ -941,11 +949,15 @@ export async function listPublicMissionsForBrand(
   brandId: string
 ): Promise<PublicMission[]> {
   if (isCloudDbEnabled()) {
-    const rows = await getPrisma().mission.findMany({
-      where: { brandId, status: { not: "DRAFT" } },
-      orderBy: { createdAt: "desc" },
-    });
-    return rows.map((m) => toPublicMission(mapPrismaMission(m)));
+    try {
+      const rows = await getPrisma().mission.findMany({
+        where: { brandId, status: { not: "DRAFT" } },
+        orderBy: { createdAt: "desc" },
+      });
+      return rows.map((m) => toPublicMission(mapPrismaMission(m)));
+    } catch (err) {
+      console.warn("[Store] Prisma listPublicMissions error, falling back to local DB:", err);
+    }
   }
 
   const db = getDb();
@@ -958,20 +970,28 @@ export async function findMissionById(
   missionId: string
 ): Promise<Mission | null> {
   if (isCloudDbEnabled()) {
-    const row = await getPrisma().mission.findUnique({
-      where: { id: missionId },
-    });
-    return row ? mapPrismaMission(row) : null;
+    try {
+      const row = await getPrisma().mission.findUnique({
+        where: { id: missionId },
+      });
+      return row ? mapPrismaMission(row) : null;
+    } catch (err) {
+      console.warn("[Store] Prisma findMissionById error, falling back to local DB:", err);
+    }
   }
   return getDb().missions.find((m) => m.id === missionId) || null;
 }
 
 export async function findHunterById(hunterId: string): Promise<Hunter | null> {
   if (isCloudDbEnabled()) {
-    const row = await getPrisma().hunter.findUnique({
-      where: { id: hunterId },
-    });
-    return row ? mapPrismaHunter(row) : null;
+    try {
+      const row = await getPrisma().hunter.findUnique({
+        where: { id: hunterId },
+      });
+      return row ? mapPrismaHunter(row) : null;
+    } catch (err) {
+      console.warn("[Store] Prisma findHunterById error, falling back to local DB:", err);
+    }
   }
   return getDb().hunters.find((h) => h.id === hunterId) || null;
 }
@@ -984,50 +1004,54 @@ export async function upsertHunterAndLead(params: {
   sourceMissionId: string | null;
 }): Promise<Hunter> {
   if (isCloudDbEnabled()) {
-    const prisma = getPrisma();
-    const sourceMission = params.sourceMissionId
-      ? await prisma.mission.findUnique({
-          where: { id: params.sourceMissionId },
-          select: { city: true },
-        })
-      : null;
+    try {
+      const prisma = getPrisma();
+      const sourceMission = params.sourceMissionId
+        ? await prisma.mission.findUnique({
+            where: { id: params.sourceMissionId },
+            select: { city: true },
+          })
+        : null;
 
-    const hunter = await prisma.hunter.upsert({
-      where: { whatsapp: params.whatsapp },
-      update: {
-        alias: params.alias,
-        ...(params.isAdult18 ? { isAdult18: true } : {}),
-      },
-      create: {
-        alias: params.alias,
-        whatsapp: params.whatsapp,
-        isAdult18: params.isAdult18,
-      },
-    });
-
-    await prisma.brandLead.upsert({
-      where: {
-        brandId_whatsapp: {
-          brandId: params.brand.id,
-          whatsapp: params.whatsapp,
+      const hunter = await prisma.hunter.upsert({
+        where: { whatsapp: params.whatsapp },
+        update: {
+          alias: params.alias,
+          ...(params.isAdult18 ? { isAdult18: true } : {}),
         },
-      },
-      update: {
-        alias: params.alias,
-        ...(params.isAdult18 ? { isAdult18: true } : {}),
-      },
-      create: {
-        brandId: params.brand.id,
-        hunterId: hunter.id,
-        alias: params.alias,
-        whatsapp: params.whatsapp,
-        isAdult18: hunter.isAdult18,
-        sourceMissionId: params.sourceMissionId,
-        city: sourceMission?.city || params.brand.cityDefault,
-      },
-    });
+        create: {
+          alias: params.alias,
+          whatsapp: params.whatsapp,
+          isAdult18: params.isAdult18,
+        },
+      });
 
-    return mapPrismaHunter(hunter);
+      await prisma.brandLead.upsert({
+        where: {
+          brandId_whatsapp: {
+            brandId: params.brand.id,
+            whatsapp: params.whatsapp,
+          },
+        },
+        update: {
+          alias: params.alias,
+          ...(params.isAdult18 ? { isAdult18: true } : {}),
+        },
+        create: {
+          brandId: params.brand.id,
+          hunterId: hunter.id,
+          alias: params.alias,
+          whatsapp: params.whatsapp,
+          isAdult18: hunter.isAdult18,
+          sourceMissionId: params.sourceMissionId,
+          city: sourceMission?.city || params.brand.cityDefault,
+        },
+      });
+
+      return mapPrismaHunter(hunter);
+    } catch (err) {
+      console.warn("[Store] Prisma upsertHunterAndLead error, falling back to local DB:", err);
+    }
   }
 
   const db = getDb();
@@ -1083,42 +1107,46 @@ export async function getBrandAdminBundle(brandId: string): Promise<{
   telemetry: HunterMissionTelemetry[];
 }> {
   if (isCloudDbEnabled()) {
-    const prisma = getPrisma();
-    const [missions, reusableNodes, leads, claims] = await Promise.all([
-      prisma.mission.findMany({
-        where: { brandId },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.reusableQrNode.findMany({
-        where: { brandId },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.brandLead.findMany({
-        where: { brandId },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.claim.findMany({
-        where: { brandId },
-        orderBy: { claimedAt: "desc" },
-      }),
-    ]);
+    try {
+      const prisma = getPrisma();
+      const [missions, reusableNodes, leads, claims] = await Promise.all([
+        prisma.mission.findMany({
+          where: { brandId },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.reusableQrNode.findMany({
+          where: { brandId },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.brandLead.findMany({
+          where: { brandId },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.claim.findMany({
+          where: { brandId },
+          orderBy: { claimedAt: "desc" },
+        }),
+      ]);
 
-    const missionIds = missions.map((m) => m.id);
-    const telemetry =
-      missionIds.length > 0
-        ? await prisma.hunterMissionTelemetry.findMany({
-            where: { missionId: { in: missionIds } },
-            orderBy: { lastDistanceMeters: "asc" },
-          })
-        : [];
+      const missionIds = missions.map((m) => m.id);
+      const telemetry =
+        missionIds.length > 0
+          ? await prisma.hunterMissionTelemetry.findMany({
+              where: { missionId: { in: missionIds } },
+              orderBy: { lastDistanceMeters: "asc" },
+            })
+          : [];
 
-    return {
-      missions: missions.map(mapPrismaMission),
-      reusableNodes: reusableNodes.map(mapPrismaNode),
-      leads: leads.map(mapPrismaLead),
-      claims: claims.map(mapPrismaClaim),
-      telemetry: telemetry.map(mapPrismaTelemetry),
-    };
+      return {
+        missions: missions.map(mapPrismaMission),
+        reusableNodes: reusableNodes.map(mapPrismaNode),
+        leads: leads.map(mapPrismaLead),
+        claims: claims.map(mapPrismaClaim),
+        telemetry: telemetry.map(mapPrismaTelemetry),
+      };
+    } catch (err) {
+      console.warn("[Store] Prisma getBrandAdminBundle error, falling back to local DB:", err);
+    }
   }
 
   const db = getDb();
