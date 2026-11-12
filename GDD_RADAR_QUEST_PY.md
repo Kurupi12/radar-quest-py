@@ -173,7 +173,7 @@ En lugar de utilizar un mapa comercial genérico que rompería la inmersión del
   * *Calles Residenciales:* Cian Táctico Refinado (`#38bdf8` a 82% opacidad)
   * *Parques y Plazas Reales:* Verde Esmeralda Bosque Oscuro (`#065f46`), contrastando como oasis sobre el chasis urbano.
   * *Ríos y Cuerpos de Agua:* Azul Cobalto Profundo (`#0284c7`) con costas iluminadas (`#38bdf8`)
-  * *Edificios y Manzanas (16-Bit):* Bloques de acero pizarra (`#1e293b`) con contorno nítido geométrico (`#334155`).
+  * *Edificios y Manzanas (16-Bit Multicolor):* Distribución cromática pseudoaleatoria determinista en 6 tonos cyberpunk (*Violeta `#341c54`, Turquesa `#113e47`, Índigo `#1a2e56`, Cobre `#442a19`, Magenta `#3e162e` y Grafito `#212b3d`*) con contornos neón vectoriales y relieve 2.5D diferenciado en capas base y techo.
   * *Textura CRT:* Scanlines cinematográficas sutiles (`opacity: 0.18`), aportando grano analógico sin opacar la legibilidad del mapa.
 
 ---

@@ -299,10 +299,39 @@ export function ArcadeMap({
               map.setPaintProperty(layer.id, "fill-opacity", 0.75);
             } catch {}
           } else if (id.includes("building")) {
-            // 16-Bit Architectural Buildings: Crisp Slate Steel with Clean Borders
+            // Multi-Hue 16-Bit Cyberpunk Buildings: Deterministic Pseudo-Random Color Distribution
+            const isTopLayer = id.includes("top");
+            const buildingColorExpr = [
+              "match",
+              ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
+              0, isTopLayer ? "#341c54" : "#1a0f2b", // Cyberpunk Violet
+              1, isTopLayer ? "#113e47" : "#0a2228", // Neon Dark Teal
+              2, isTopLayer ? "#1a2e56" : "#0d182e", // Tactical Mecha Indigo
+              3, isTopLayer ? "#442a19" : "#24160c", // Industrial Amber Copper
+              4, isTopLayer ? "#3e162e" : "#220b19", // Dark Synth Magenta
+              5, isTopLayer ? "#212b3d" : "#101620", // Slate Steel Graphite
+              "#1e293b",
+            ];
+
+            const buildingOutlineExpr = [
+              "match",
+              ["%", ["to-number", ["coalesce", ["id"], ["get", "id"], 1]], 6],
+              0, "#7c3aed",
+              1, "#06b6d4",
+              2, "#3b82f6",
+              3, "#f59e0b",
+              4, "#ec4899",
+              5, "#64748b",
+              "#334155",
+            ];
+
             try {
-              map.setPaintProperty(layer.id, "fill-color", "#1e293b");
-              map.setPaintProperty(layer.id, "fill-outline-color", "#334155");
+              map.setPaintProperty(layer.id, "fill-color", buildingColorExpr as any);
+              map.setPaintProperty(
+                layer.id,
+                "fill-outline-color",
+                buildingOutlineExpr as any
+              );
               map.setPaintProperty(layer.id, "fill-opacity", 0.95);
             } catch {}
           }
