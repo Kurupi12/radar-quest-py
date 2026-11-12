@@ -225,7 +225,7 @@ export function BrandAdminClient({
       `🧭 *PISTA INICIAL:*`,
       `"${mission.zoneHint}"`,
       ``,
-      `📡 Abrí el Radar Térmico en vivo, rastreá la señal en la calle y escaneá el QR oculto antes que nadie:`,
+      `📡 Abrí el Radar Térmico en vivo, rastreá la señal en la calle y encontrá el tesoro antes que nadie:`,
       `👉 ${directMissionUrl}`,
       ``,
       `⚡ Organiza: *${brand.name}*${brand.requireAdult18 ? " (+18)" : ""}`,

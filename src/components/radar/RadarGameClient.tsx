@@ -985,7 +985,12 @@ export function RadarGameClient({
                 </div>
                 <p className="text-[11px] text-slate-300 leading-snug">
                   <strong className="text-cyan-300">Pista:</strong>{" "}
-                  {selectedMission.zoneHint}
+                  {selectedMission.zoneHint
+                    ? selectedMission.zoneHint
+                        .replace(/para\s+hallar\s+el\s+QR\s+oculto/gi, "para hallar el tesoro")
+                        .replace(/para\s+hallar\s+el\s+QR/gi, "para hallar el tesoro")
+                        .replace(/el\s+QR\s+oculto/gi, "el tesoro")
+                    : `Seguí las ondas térmicas en ${selectedMission.city} para hallar el tesoro.`}
                 </p>
 
                 {/* TACTICAL VECTOR ASSISTANCE (Dynamic Walking Kinematics & Typewriter HUD) */}

@@ -73,12 +73,19 @@ export function mapPrismaBrand(b: PrismaBrand): Brand {
 }
 
 export function mapPrismaMission(m: PrismaMission): Mission {
+  const cleanZoneHint = m.zoneHint
+    ? m.zoneHint
+        .replace(/para\s+hallar\s+el\s+QR\s+oculto/gi, "para hallar el tesoro")
+        .replace(/para\s+hallar\s+el\s+QR/gi, "para hallar el tesoro")
+        .replace(/el\s+QR\s+oculto/gi, "el tesoro")
+    : m.zoneHint;
+
   return {
     id: m.id,
     brandId: m.brandId,
     title: m.title,
     city: m.city,
-    zoneHint: m.zoneHint,
+    zoneHint: cleanZoneHint,
     secretLat: m.secretLat,
     secretLng: m.secretLng,
     publicCenterLat: m.publicCenterLat,
@@ -260,12 +267,19 @@ export function toPublicBrand(brand: Brand): PublicBrand {
 }
 
 export function toPublicMission(mission: Mission): PublicMission {
+  const cleanZoneHint = mission.zoneHint
+    ? mission.zoneHint
+        .replace(/para\s+hallar\s+el\s+QR\s+oculto/gi, "para hallar el tesoro")
+        .replace(/para\s+hallar\s+el\s+QR/gi, "para hallar el tesoro")
+        .replace(/el\s+QR\s+oculto/gi, "el tesoro")
+    : mission.zoneHint;
+
   return {
     id: mission.id,
     brandId: mission.brandId,
     title: mission.title,
     city: mission.city,
-    zoneHint: mission.zoneHint,
+    zoneHint: cleanZoneHint,
     publicCenterLat: mission.publicCenterLat,
     publicCenterLng: mission.publicCenterLng,
     zoneRadiusMeters: mission.zoneRadiusMeters,

@@ -520,7 +520,7 @@ export function ViralRecorder({
       try {
         await navigator.share({
           title: `¡Buscando el tesoro de ${brand.name} en Radar Quest!`,
-          text: `Estoy en modo ${thermalState} buscando el QR oculto de ${brand.name} #RadarQuestPY`,
+          text: `Estoy en modo ${thermalState} buscando el tesoro de ${brand.name} #RadarQuestPY`,
           files: [file],
         });
         return;

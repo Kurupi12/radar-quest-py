@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       city,
       zoneHint:
         String(body.zoneHint || "").trim() ||
-        `Seguí las ondas térmicas en ${city} para hallar el QR oculto.`,
+        `Seguí las ondas térmicas en ${city} para hallar el tesoro.`,
       secretLat,
       secretLng,
       captureRadiusMeters: Math.min(
