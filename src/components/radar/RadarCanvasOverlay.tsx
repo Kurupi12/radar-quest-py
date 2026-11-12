@@ -141,11 +141,12 @@ function drawHunterSprite16Bit(
   const bob = frame % 2 === 0 ? 0 : -2;
 
   ctx.save();
-  // Ground shadow
-  ctx.fillStyle = "rgba(10, 4, 24, 0.78)";
-  ctx.fillRect(cx - 10, cy + 12, 20, 4);
 
   if (inVehicle) {
+    // Ground shadow for cyber car
+    ctx.fillStyle = "rgba(10, 4, 24, 0.78)";
+    ctx.fillRect(cx - 10, cy + 12, 20, 4);
+
     // 16-bit Cyber Car Sprite
     const x0 = cx - 14;
     const y0 = cy - 8 + bob;
@@ -544,23 +545,6 @@ export function RadarCanvasOverlay({
 
       if (!vehicle) {
         const drawSize = isBurning ? 48 : 46;
-        // Ground shadow (reacts dynamically to vertical jump phase, step or idle)
-        const shadowScale = isBurning
-          ? 0.75 + Math.sin(tick * 0.25) * 0.25
-          : isFrozen
-          ? 0.95
-          : isMoving
-          ? 0.92 + Math.sin(walkStepPhase * Math.PI) * 0.08
-          : 1;
-
-        ctx.fillStyle = "rgba(10, 4, 24, 0.72)";
-        ctx.fillRect(
-          cx - 11 * shadowScale + shiverX * 0.5,
-          cy + 13,
-          22 * shadowScale,
-          5
-        );
-
         const targetX = Math.round(cx - drawSize / 2 + shiverX);
         const targetY = Math.round(cy - drawSize / 2 - 1 + shiverY);
 

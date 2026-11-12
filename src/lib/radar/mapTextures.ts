@@ -398,3 +398,4 @@ export function registerAllRpgTextures(map: MapLibreMap): void {
     }
   }
 }
+
