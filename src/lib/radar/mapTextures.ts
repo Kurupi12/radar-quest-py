@@ -555,6 +555,13 @@ export interface TreeFeatureCollection {
   features: TreeFeature[];
 }
 
+export const RPG_TREES_SOURCE_ID = "rpg-trees-source";
+export const RPG_TREES_LAYER_ID = "rpg-trees-layer";
+export const RPG_TREES_MIN_ZOOM = 12;
+
+const MAX_TREE_GRID_CELLS = 4_500;
+const MAX_TREE_FEATURES = 10_000;
+
 /**
  * Generates deterministic GeoJSON tree features across a bounding box
  */
@@ -562,16 +569,34 @@ function computeTreeLodStep(bounds: TreeBounds): number {
   const baseStep = 0.00035; // ~38 meters per cell
   const lngSpan = Math.max(0.0001, bounds.east - bounds.west);
   const latSpan = Math.max(0.0001, bounds.north - bounds.south);
-  const estCells = (lngSpan / baseStep) * (latSpan / baseStep);
-  // Discrete deterministic grid LOD tiers keep tree positions locked when panning while staying 60fps zoomed out
-  return estCells > 14_000
-    ? baseStep * 4
-    : estCells > 3_600
-    ? baseStep * 2
-    : baseStep;
+  const baseCells = (lngSpan / baseStep) * (latSpan / baseStep);
+
+  // Discrete power-of-2 LOD tiers keep tree positions anchored when panning while
+  // bounding worst-case grid iterations under any viewport size or camera pitch.
+  if (baseCells <= 3_600) return baseStep;
+  if (baseCells <= 14_000) return baseStep * 2;
+  if (baseCells <= 56_000) return baseStep * 4;
+
+  const minScale = Math.ceil(Math.sqrt(baseCells / MAX_TREE_GRID_CELLS));
+  let multiplier = 4;
+  while (multiplier < minScale && multiplier < 65_536) {
+    multiplier *= 2;
+  }
+  return baseStep * multiplier;
 }
 
 export function generateRpgTreesGeoJson(bounds: TreeBounds): TreeFeatureCollection {
+  if (
+    !Number.isFinite(bounds.west) ||
+    !Number.isFinite(bounds.east) ||
+    !Number.isFinite(bounds.south) ||
+    !Number.isFinite(bounds.north) ||
+    bounds.east <= bounds.west ||
+    bounds.north <= bounds.south
+  ) {
+    return { type: "FeatureCollection", features: [] };
+  }
+
   const step = computeTreeLodStep(bounds);
   const features: TreeFeature[] = [];
 
@@ -587,8 +612,12 @@ export function generateRpgTreesGeoJson(bounds: TreeBounds): TreeFeatureCollecti
     "rpg-shrub",
   ];
 
-  for (let gy = startY; gy <= endY; gy++) {
+  outerLoop: for (let gy = startY; gy <= endY; gy++) {
     for (let gx = startX; gx <= endX; gx++) {
+      if (features.length >= MAX_TREE_FEATURES) {
+        break outerLoop;
+      }
+
       const h = cellHash(gx, gy);
       const r = h % 100;
 
@@ -608,7 +637,7 @@ export function generateRpgTreesGeoJson(bounds: TreeBounds): TreeFeatureCollecti
       });
 
       // 22% chance of a secondary tree forming a grove / park cluster
-      if (r > 78) {
+      if (r > 78 && features.length < MAX_TREE_FEATURES) {
         const offX2 = ((h >> 18) % 60) / 100 + 0.2;
         const offY2 = ((h >> 22) % 60) / 100 + 0.2;
         features.push({
@@ -627,9 +656,6 @@ export function generateRpgTreesGeoJson(bounds: TreeBounds): TreeFeatureCollecti
 
   return { type: "FeatureCollection", features };
 }
-
-export const RPG_TREES_SOURCE_ID = "rpg-trees-source";
-export const RPG_TREES_LAYER_ID = "rpg-trees-layer";
 
 /**
  * Registers all 16-bit textures and tree sprites into MapLibre
@@ -693,6 +719,12 @@ const syncedRpgTreesCache = new WeakMap<
 export function syncRpgTreesOnMap(map: MapLibreMap): void {
   if (!map.getStyle()) return;
 
+  const zoom = map.getZoom();
+  // `rpg-trees-layer` has `minzoom: 12`; never generate huge global GeoJSON grids when zoomed out.
+  if (!Number.isFinite(zoom) || zoom < RPG_TREES_MIN_ZOOM) {
+    return;
+  }
+
   const bounds = map.getBounds();
   const viewBounds: TreeBounds = {
     west: bounds.getWest(),
@@ -700,7 +732,17 @@ export function syncRpgTreesOnMap(map: MapLibreMap): void {
     south: bounds.getSouth(),
     north: bounds.getNorth(),
   };
-  const zoom = map.getZoom();
+  if (
+    !Number.isFinite(viewBounds.west) ||
+    !Number.isFinite(viewBounds.east) ||
+    !Number.isFinite(viewBounds.south) ||
+    !Number.isFinite(viewBounds.north) ||
+    viewBounds.east <= viewBounds.west ||
+    viewBounds.north <= viewBounds.south
+  ) {
+    return;
+  }
+
   const existingSource = map.getSource(RPG_TREES_SOURCE_ID) as GeoJSONSource | undefined;
   const cached = syncedRpgTreesCache.get(map);
 
@@ -727,10 +769,10 @@ export function syncRpgTreesOnMap(map: MapLibreMap): void {
   const padSpan = Math.max(lngSpan, latSpan) * 0.38;
 
   const paddedBounds: TreeBounds = {
-    west: viewBounds.west - padSpan,
-    east: viewBounds.east + padSpan,
-    south: viewBounds.south - padSpan,
-    north: viewBounds.north + padSpan,
+    west: Math.max(-180, viewBounds.west - padSpan),
+    east: Math.min(180, viewBounds.east + padSpan),
+    south: Math.max(-85, viewBounds.south - padSpan),
+    north: Math.min(85, viewBounds.north + padSpan),
   };
 
   const geojson = generateRpgTreesGeoJson(paddedBounds);
@@ -761,7 +803,7 @@ export function syncRpgTreesOnMap(map: MapLibreMap): void {
         id: RPG_TREES_LAYER_ID,
         type: "symbol",
         source: RPG_TREES_SOURCE_ID,
-        minzoom: 12,
+        minzoom: RPG_TREES_MIN_ZOOM,
         layout: {
           "icon-image": ["get", "treeType"],
           "icon-size": [

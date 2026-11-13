@@ -12,6 +12,7 @@ import {
 import type { RouteBonusBeacon } from "@/types/radar";
 import { sanitizePublicAlias } from "@/lib/radar/aliasPrivacy";
 import {
+  RPG_TREES_MIN_ZOOM,
   registerAllRpgTextures,
   setRpgTreesVisibility,
   syncRpgTreesOnMap,
@@ -697,7 +698,10 @@ export function ArcadeMap({
     map.on("load", applyArcade16BitPalette);
 
     const syncTreesIfRpg = () => {
-      if (activeThemeRef.current === "rpg-16bit") {
+      if (
+        activeThemeRef.current === "rpg-16bit" &&
+        map.getZoom() >= RPG_TREES_MIN_ZOOM
+      ) {
         try {
           syncRpgTreesOnMap(map);
         } catch {}
@@ -709,6 +713,7 @@ export function ArcadeMap({
     map.on("idle", () => {
       if (
         activeThemeRef.current === "rpg-16bit" &&
+        map.getZoom() >= RPG_TREES_MIN_ZOOM &&
         !map.getLayer("rpg-trees-layer")
       ) {
         syncTreesIfRpg();
