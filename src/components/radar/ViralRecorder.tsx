@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Download, Film, Share2, Sparkles, X } from "lucide-react";
 import fixWebmDuration from "fix-webm-duration";
 import type { Brand, PublicBrand, PublicMission, ThermalState } from "@/types/radar";
+import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
 
 interface ViralRecorderProps {
   brand: Brand | PublicBrand;
@@ -11,6 +12,12 @@ interface ViralRecorderProps {
   hunterAlias: string;
   thermalState: ThermalState;
   activeHunters: number;
+  tacticalHintMessage?: string | null;
+  proofOfHuntProgress?: {
+    currentValidPings: number;
+    requiredPings: number;
+    ready: boolean;
+  } | null;
   getMapCanvas: () => HTMLCanvasElement | null;
   getOverlayCanvas: () => HTMLCanvasElement | null;
 }
@@ -170,6 +177,8 @@ export function ViralRecorder({
   hunterAlias,
   thermalState,
   activeHunters,
+  tacticalHintMessage = null,
+  proofOfHuntProgress = null,
   getMapCanvas,
   getOverlayCanvas,
 }: ViralRecorderProps) {
@@ -190,6 +199,8 @@ export function ViralRecorder({
     hunterAlias,
     thermalState,
     activeHunters,
+    tacticalHintMessage,
+    proofOfHuntProgress,
   });
   livePropsRef.current = {
     brand,
@@ -197,6 +208,8 @@ export function ViralRecorder({
     hunterAlias,
     thermalState,
     activeHunters,
+    tacticalHintMessage,
+    proofOfHuntProgress,
   };
 
   useEffect(() => {
@@ -220,6 +233,8 @@ export function ViralRecorder({
       hunterAlias: alias,
       thermalState: thermal,
       activeHunters: huntersCount,
+      tacticalHintMessage: hintMsg,
+      proofOfHuntProgress: poh,
     } = livePropsRef.current;
 
     ctx.imageSmoothingEnabled = false;
@@ -315,22 +330,55 @@ export function ViralRecorder({
     }
 
     ctx.textAlign = "center";
-    ctx.font = "900 24px monospace";
+    ctx.font = "900 22px monospace";
     const thermalLabel =
       isQuemando
         ? "¡QUEMANDO! (<30M) • TESORO CERCA"
         : isCaliente
-        ? "¡CALIENTE! (<100M) • ONDA FUERTE"
+        ? "¡CALIENTE! (30-160M) • ONDA FUERTE"
         : thermal === "TIBIO"
-        ? "TIBIO (ZONA PRÓXIMA)"
+        ? "TIBIO (160-650M) • ZONA PRÓXIMA"
+        : thermal === "FUERA DE ZONA"
+        ? "FUERA DE ZONA • ACÉRCATE AL ÁREA"
+        : thermal === "TELEPORT_ANOMALY"
+        ? "ALERTA GPS • MODO PEATONAL"
         : "CONGELADO • RASTREANDO ÁREA";
 
     // 3D Shadow for thermal text
     ctx.fillStyle = "#000000";
     ctx.fillText(thermalLabel, STORY_WIDTH / 2 + 2, thermalPlatY + 38);
 
-    ctx.fillStyle = isQuemando ? "#ff2a55" : isCaliente ? "#fbbf24" : "#38bdf8";
+    ctx.fillStyle = isQuemando
+      ? "#ff2a55"
+      : isCaliente
+      ? "#fbbf24"
+      : thermal === "TIBIO"
+      ? "#fde047"
+      : "#38bdf8";
     ctx.fillText(thermalLabel, STORY_WIDTH / 2, thermalPlatY + 36);
+
+    // 7b. Optional Tactical Vector Hint + Proof of Hunt Status Banner
+    if (hintMsg || poh) {
+      const stripY = STORY_HEIGHT - 196;
+      const stripX = 32;
+      const stripW = STORY_WIDTH - 64;
+      drawCanvas3DPanel(
+        ctx,
+        stripX,
+        stripY,
+        stripW,
+        36,
+        poh?.ready ? "#22c55e" : "#00f0ff",
+        "rgba(9, 14, 29, 0.9)"
+      );
+      ctx.textAlign = "center";
+      ctx.font = "800 12px monospace";
+      ctx.fillStyle = poh?.ready ? "#4ade80" : "#e2e8f0";
+      const hintLine = hintMsg
+        ? hintMsg.slice(0, 44)
+        : `RASTREO VERIFICADO: ${poh?.currentValidPings ?? 0}/${poh?.requiredPings ?? 0}`;
+      ctx.fillText(hintLine, STORY_WIDTH / 2, stripY + 23);
+    }
 
     // 8. Bottom White-Label Brand Chassis Card
     const botPanelX = 24;
@@ -419,9 +467,18 @@ export function ViralRecorder({
     animIdRef.current = window.requestAnimationFrame(renderLoop);
 
     const stream = compositeCanvas.captureStream(30);
+    const audioTracks = arcadeHardware.getRecordingAudioTracks();
+    for (const track of audioTracks) {
+      try {
+        stream.addTrack(track);
+      } catch {
+        // Ignore if track already ended or unsupported
+      }
+    }
 
     const mimeCandidates = [
       "video/mp4",
+      "video/webm;codecs=vp8,opus",
       "video/webm;codecs=vp8",
       "video/webm;codecs=vp9",
       "video/webm",
@@ -437,10 +494,19 @@ export function ViralRecorder({
     setCleanMimeType(cleanBaseMime);
 
     const chunks: BlobPart[] = [];
-    const recorder = new MediaRecorder(stream, {
-      mimeType: selectedFormat,
-      videoBitsPerSecond: 3_000_000,
-    });
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, {
+        mimeType: selectedFormat,
+        videoBitsPerSecond: 3_000_000,
+      });
+    } catch {
+      const videoOnlyStream = compositeCanvas.captureStream(30);
+      recorder = new MediaRecorder(videoOnlyStream, {
+        mimeType: "video/webm",
+        videoBitsPerSecond: 3_000_000,
+      });
+    }
 
     recorder.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) chunks.push(ev.data);

@@ -1,9 +1,10 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { HUNTER_SESSION_COOKIE, verifyHunterSession } from "@/lib/auth/hmac";
+import { isCloudDbEnabled } from "@/lib/db/prisma";
 import { findHunterById } from "@/lib/db/store";
 import { processRadarClaim } from "@/lib/radar/engine";
-import type { RadarClaimRequest } from "@/types/radar";
+import type { Hunter, RadarClaimRequest } from "@/types/radar";
 
 export async function POST(request: Request) {
   try {
@@ -15,10 +16,30 @@ export async function POST(request: Request) {
       verifyHunterSession(cookieToken) ||
       verifyHunterSession(body.sessionToken);
 
-    const effectiveHunterId = verified?.hunterId || body.hunterId;
-    const verifiedHunter = effectiveHunterId
-      ? await findHunterById(effectiveHunterId)
-      : null;
+    if (!verified) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "HUNTER_NOT_REGISTERED",
+          message:
+            "Sesión de cazador inválida o expirada. Vuelve a confirmar tu identidad antes de reclamar.",
+        },
+        { status: 401 }
+      );
+    }
+
+    const effectiveHunterId = verified.hunterId;
+    let verifiedHunter: Hunter | null = await findHunterById(effectiveHunterId);
+
+    if (!verifiedHunter && !isCloudDbEnabled() && verified.whatsapp) {
+      verifiedHunter = {
+        id: verified.hunterId,
+        alias: verified.alias,
+        whatsapp: verified.whatsapp,
+        isAdult18: Boolean(verified.isAdult18),
+        createdAt: new Date().toISOString(),
+      };
+    }
 
     const result = await processRadarClaim(
       {
@@ -27,6 +48,7 @@ export async function POST(request: Request) {
         lng: Number(body.lng),
         accuracy: Number(body.accuracy || 10),
         hunterId: effectiveHunterId,
+        alias: verified.alias,
       },
       verifiedHunter
     );

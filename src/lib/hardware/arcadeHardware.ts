@@ -24,6 +24,9 @@ const BGM_DEFAULT_VOLUMES: Record<BgmTrackKey, number> = {
 
 class ArcadeHardwareController {
   private audioCtx: AudioContext | null = null;
+  private recordBus: GainNode | null = null;
+  private recordStreamDest: MediaStreamAudioDestinationNode | null = null;
+  private attachedElements = new WeakSet<HTMLAudioElement>();
   private wakeLockSentinel: WakeLockSentinel | null = null;
   private muted = false;
   private bgmTracks: Partial<Record<BgmTrackKey, HTMLAudioElement>> = {};
@@ -33,6 +36,8 @@ class ArcadeHardwareController {
   private desiredVolume = 0.35;
   private bgmStarted = false;
   private crossfadeTimer: number | null = null;
+  private lastThermalAudioState: ThermalState | null = null;
+  private lastThermalAudioAtMs = 0;
 
   private resolveBgmConfig(state: ThermalState): {
     track: BgmTrackKey;
@@ -72,8 +77,52 @@ class ArcadeHardwareController {
       audio.loop = true;
       this.safeSetVolume(audio, BGM_DEFAULT_VOLUMES[key]);
       this.bgmTracks[key] = audio;
+      this.attachElementToRecordBus(audio);
     }
     return this.bgmTracks[key]!;
+  }
+
+  private attachElementToRecordBus(audio: HTMLAudioElement): void {
+    if (!this.audioCtx || !this.recordBus || this.attachedElements.has(audio)) {
+      return;
+    }
+    try {
+      const source = this.audioCtx.createMediaElementSource(audio);
+      source.connect(this.audioCtx.destination);
+      source.connect(this.recordBus);
+      this.attachedElements.add(audio);
+    } catch {
+      // Element already connected or cross-origin limitation; fallback silently
+    }
+  }
+
+  /**
+   * Lazily initializes a MediaStreamAudioDestinationNode capturing Web Audio SFX + BGM
+   * so ViralRecorder can mux real game audio into captured Stories.
+   */
+  public getRecordingAudioTracks(): MediaStreamTrack[] {
+    if (typeof window === "undefined") return [];
+    const ctx = this.ensureAudio(true);
+    if (!ctx) return [];
+    try {
+      if (!this.recordStreamDest) {
+        this.recordStreamDest = ctx.createMediaStreamDestination();
+      }
+      if (!this.recordBus) {
+        this.recordBus = ctx.createGain();
+        this.recordBus.gain.value = 1;
+        this.recordBus.connect(this.recordStreamDest);
+      }
+      for (const key of BGM_TRACK_KEYS) {
+        const track = this.bgmTracks[key];
+        if (track) {
+          this.attachElementToRecordBus(track);
+        }
+      }
+      return this.recordStreamDest.stream.getAudioTracks();
+    } catch {
+      return [];
+    }
   }
 
   private clearCrossfade() {
@@ -123,8 +172,10 @@ class ArcadeHardwareController {
     return this.ensureAudio();
   }
 
-  private ensureAudio(): AudioContext | null {
-    if (typeof window === "undefined" || this.muted) return null;
+  private ensureAudio(allowEvenIfMuted = false): AudioContext | null {
+    if (typeof window === "undefined" || (this.muted && !allowEvenIfMuted)) {
+      return null;
+    }
     if (!this.audioCtx) {
       const Ctx =
         window.AudioContext ||
@@ -319,11 +370,61 @@ class ArcadeHardwareController {
 
       osc.connect(amp);
       amp.connect(ctx.destination);
+      if (this.recordBus) {
+        amp.connect(this.recordBus);
+      }
 
       osc.start(offset);
       osc.stop(offset + note.duration);
       offset += note.duration * 0.92;
     }
+  }
+
+  /**
+   * Smart adaptive sonar audio feedback:
+   * - Always chimes on thermal state transitions (or when forced).
+   * - In steady state, keeps routine polling quiet except periodic calm cues in CALIENTE/QUEMANDO.
+   */
+  public triggerSmartThermalFeedback(state: ThermalState, force = false) {
+    const now = Date.now();
+    const stateChanged = this.lastThermalAudioState !== state;
+    const elapsed = now - this.lastThermalAudioAtMs;
+
+    const shouldPlay =
+      force ||
+      stateChanged ||
+      (state === "QUEMANDO" && elapsed >= 12_000) ||
+      (state === "CALIENTE" && elapsed >= 22_000);
+
+    if (!shouldPlay) return;
+
+    this.lastThermalAudioState = state;
+    this.lastThermalAudioAtMs = now;
+    this.triggerThermalFeedback(state);
+  }
+
+  /**
+   * Active triangulation pulse sonar sweep sound.
+   */
+  public playTriangulationSweepSound() {
+    this.playNotes([
+      { freq: 440, duration: 0.06, type: "sine", gain: 0.06 },
+      { freq: 659.25, duration: 0.07, type: "sine", gain: 0.07 },
+      { freq: 987.77, duration: 0.14, type: "triangle", gain: 0.07 },
+    ]);
+    this.vibrate([45, 30, 70]);
+  }
+
+  /**
+   * Reward chime when collecting a public route bonus beacon.
+   */
+  public playBonusBeaconPickupSound() {
+    this.playNotes([
+      { freq: 659.25, duration: 0.06, type: "square", gain: 0.07 },
+      { freq: 880, duration: 0.06, type: "square", gain: 0.07 },
+      { freq: 1318.5, duration: 0.12, type: "square", gain: 0.08 },
+    ]);
+    this.vibrate([50, 30, 90]);
   }
 
   /**
