@@ -277,3 +277,70 @@ export async function getFreshGpsCoords(
   });
 }
 
+export interface MissionProximityCandidate {
+  id: string;
+  status: string;
+  publicCenterLat: number;
+  publicCenterLng: number;
+  zoneRadiusMeters: number;
+}
+
+export interface RankedMissionEntry<T extends MissionProximityCandidate> {
+  mission: T;
+  distanceMeters: number;
+  isInZone: boolean;
+}
+
+/**
+ * Formats macro distance to a mission's fuzzy public center without leaking exact treasure coords.
+ */
+export function formatMacroZoneDistance(distanceMeters: number): string {
+  if (!Number.isFinite(distanceMeters) || distanceMeters < 0) return "";
+  if (distanceMeters >= 10_000) {
+    return `~${Math.round(distanceMeters / 1000)} km`;
+  }
+  if (distanceMeters >= 1_000) {
+    return `~${(distanceMeters / 1000).toFixed(1)} km`;
+  }
+  return `~${Math.max(50, Math.round(distanceMeters / 50) * 50)} m`;
+}
+
+/**
+ * Sorts missions prioritizing ACTIVE drops first, then nearest distance to the player's coordinates.
+ */
+export function rankMissionsByProximity<T extends MissionProximityCandidate>(
+  missions: T[],
+  coords: { lat: number; lng: number }
+): RankedMissionEntry<T>[] {
+  return missions
+    .map((mission) => {
+      const distanceMeters = calculateHaversineMeters(
+        coords.lat,
+        coords.lng,
+        mission.publicCenterLat,
+        mission.publicCenterLng
+      );
+      return {
+        mission,
+        distanceMeters,
+        isInZone: distanceMeters <= mission.zoneRadiusMeters,
+      };
+    })
+    .sort((a, b) => {
+      const aActive = a.mission.status === "ACTIVE" ? 0 : 1;
+      const bActive = b.mission.status === "ACTIVE" ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
+      return a.distanceMeters - b.distanceMeters;
+    });
+}
+
+/**
+ * Picks the closest ACTIVE mission (or closest mission overall if none are ACTIVE).
+ */
+export function pickNearestMission<T extends MissionProximityCandidate>(
+  missions: T[],
+  coords: { lat: number; lng: number }
+): T | null {
+  return rankMissionsByProximity(missions, coords)[0]?.mission ?? null;
+}
+

@@ -11,7 +11,7 @@ Documento vivo de seguimiento técnico y de jugabilidad para implementar mejoras
   - **1.2. Lectura GPS fresca obligatoria al reclamar (`QrClaimModal` y `ArcadeQrScannerModal`):** Centralizar `getFreshGpsCoords` en `src/lib/radar/geo.ts` con `maximumAge: 0` para forzar un fix real del GPS al validar reclamos en modo real (evitando rechazos falsos por coordenadas cacheadas en `localStorage` o por el centro difuso `publicCenterLat/Lng` al abrir links externos `/b/[brand]/claim`).
   - **1.3. Cierre de brechas de seguridad en APIs:** Restringir `POST /api/radar/demo-step` en producción (requiere sesión verificada de Comercio o Super-Admin, o `ENABLE_RADAR_DEMO="true"`) y exigir sesión HMAC-SHA256 verificada en `POST /api/radar/ping` y `POST /api/radar/claim` sin aceptar suplantación vía `body.hunterId`, manejando expiración `401` limpiamente en `RadarGameClient`.
 
-- [ ] **2. Selector de misiones por cercanía/ciudad en el HUD del jugador**
+- [x] **2. Selector de misiones por cercanía/ciudad en el HUD del jugador** *(Completado)*
   - Conectar `setSelectedMissionId` en `RadarGameClient.tsx` mediante un selector compacto en el HUD superior/tarjeta de misión para alternar entre misiones activas de una misma marca, preseleccionando automáticamente la misión más cercana al GPS o mostrando macro-distancia/ciudad cuando está `FUERA DE ZONA`.
 
 - [ ] **3. Indicador visible de `Proof of Hunt` (`validHuntPings / requiredPings`) y acceso a "Mi Cupón"**

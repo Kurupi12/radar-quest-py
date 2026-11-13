@@ -1,6 +1,13 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -8,6 +15,9 @@ import {
   BellRing,
   Camera,
   Car,
+  Check,
+  ChevronDown,
+  ChevronUp,
   Compass,
   Flame,
   Gamepad2,
@@ -48,7 +58,13 @@ import { ViralRecorder } from "@/components/radar/ViralRecorder";
 import { RadarPreloader } from "@/components/radar/RadarPreloader";
 import { BrandIconSvg } from "@/components/icons/BrandIconSvg";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
-import { getFreshGpsCoords } from "@/lib/radar/geo";
+import {
+  calculateHaversineMeters,
+  formatMacroZoneDistance,
+  getFreshGpsCoords,
+  pickNearestMission,
+  rankMissionsByProximity,
+} from "@/lib/radar/geo";
 import { VEHICLE_OVERRIDE_MESSAGE } from "@/lib/radar/tacticalVectorAssistance";
 
 interface RadarGameClientProps {
@@ -308,6 +324,10 @@ export function RadarGameClient({
 
   const [gpsMode, setGpsMode] = useState<"real" | "simulator">("real");
   const [hasLiveGpsFix, setHasLiveGpsFix] = useState(false);
+  const [coordsOrigin, setCoordsOrigin] = useState<
+    "fallback" | "cached" | "live" | "simulator"
+  >("fallback");
+  const [missionMenuOpen, setMissionMenuOpen] = useState(false);
   const [showSimBar, setShowSimBar] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
   const [demoQrHint, setDemoQrHint] = useState<string>(
@@ -351,8 +371,92 @@ export function RadarGameClient({
   const mapCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const tacticalSnapshotRef = useRef<TacticalCooldownSnapshot | null>(null);
+  const missionSelectorRef = useRef<HTMLDivElement | null>(null);
+  const userPickedMissionRef = useRef(false);
+  const autoSelectedByGpsRef = useRef(false);
   const coordsRef = useRef(coords);
   coordsRef.current = coords;
+
+  // Detect cached GPS coords post-hydration and auto-select nearest active mission if unpinned
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("rq_last_known_coords");
+      if (!cached) return;
+      const parsed = JSON.parse(cached);
+      if (typeof parsed?.lat === "number" && typeof parsed?.lng === "number") {
+        setCoordsOrigin((prev) => (prev === "fallback" ? "cached" : prev));
+        const isRecent =
+          typeof parsed?.savedAt === "number" &&
+          Date.now() - parsed.savedAt < 30 * 60 * 1000;
+        if (
+          isRecent &&
+          !initialMissionId &&
+          !autoOpenClaimToken &&
+          !userPickedMissionRef.current &&
+          missions.length > 1
+        ) {
+          const nearest = pickNearestMission(missions, {
+            lat: parsed.lat,
+            lng: parsed.lng,
+          });
+          if (nearest && nearest.id !== selectedMissionId) {
+            setSelectedMissionId(nearest.id);
+          }
+        }
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-select closest active mission once when real live GPS lock arrives
+  useEffect(() => {
+    if (!hasLiveGpsFix || gpsMode !== "real" || autoSelectedByGpsRef.current) {
+      return;
+    }
+    autoSelectedByGpsRef.current = true;
+    if (
+      !initialMissionId &&
+      !autoOpenClaimToken &&
+      !userPickedMissionRef.current &&
+      missions.length > 1
+    ) {
+      const nearest = pickNearestMission(missions, coordsRef.current);
+      if (nearest && nearest.id !== selectedMissionId) {
+        setSelectedMissionId(nearest.id);
+      }
+    }
+  }, [
+    hasLiveGpsFix,
+    gpsMode,
+    initialMissionId,
+    autoOpenClaimToken,
+    missions,
+    selectedMissionId,
+  ]);
+
+  // Close mission selector menu on outside click or Escape
+  useEffect(() => {
+    if (!missionMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        missionSelectorRef.current &&
+        !missionSelectorRef.current.contains(event.target as Node)
+      ) {
+        setMissionMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMissionMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [missionMenuOpen]);
 
   const handleOverlayCanvasReady = useCallback((c: HTMLCanvasElement) => {
     overlayCanvasRef.current = c;
@@ -505,12 +609,13 @@ export function RadarGameClient({
     };
   }, [hunter]);
 
-  // 3. Re-center map on mission switch
+  // 3. Re-center map on mission switch (only in simulator or before real GPS fix)
   useEffect(() => {
+    setMissionMenuOpen(false);
     if (selectedMission) {
       setPingData(null);
       tacticalSnapshotRef.current = null;
-      if (gpsMode === "simulator") {
+      if (gpsMode === "simulator" || coordsOrigin === "fallback") {
         setCoords({
           lat: selectedMission.publicCenterLat,
           lng: selectedMission.publicCenterLng,
@@ -610,6 +715,7 @@ export function RadarGameClient({
           );
         } catch {}
         setHasLiveGpsFix(true);
+        setCoordsOrigin("live");
         setCoords(next);
       },
       () => {},
@@ -655,6 +761,7 @@ export function RadarGameClient({
       const step = await res.json();
       if (res.ok && step.ok) {
         setGpsMode("simulator");
+        setCoordsOrigin("simulator");
         const nextCoords = {
           lat: step.lat,
           lng: step.lng,
@@ -705,6 +812,45 @@ export function RadarGameClient({
     missionValidationMode
   );
 
+  const hasKnownPlayerCoords = coordsOrigin !== "fallback";
+  const rankedMissions = useMemo(
+    () => rankMissionsByProximity(missions, coords),
+    [missions, coords]
+  );
+
+  const selectedMissionMacroDist = useMemo(() => {
+    if (!selectedMission || !hasKnownPlayerCoords) return null;
+    return calculateHaversineMeters(
+      coords.lat,
+      coords.lng,
+      selectedMission.publicCenterLat,
+      selectedMission.publicCenterLng
+    );
+  }, [selectedMission, hasKnownPlayerCoords, coords]);
+
+  const thermalSubtitle = useMemo(() => {
+    if (currentThermal !== "FUERA DE ZONA" || !selectedMission) {
+      return thermalStyle.subtitle;
+    }
+    if (!hasKnownPlayerCoords || selectedMissionMacroDist === null) {
+      return `ACERCATE A ${selectedMission.city}`;
+    }
+    if (selectedMissionMacroDist > selectedMission.zoneRadiusMeters) {
+      return `A ${formatMacroZoneDistance(selectedMissionMacroDist)} DE ${selectedMission.city}`;
+    }
+    if (pingData?.thermalState === "FUERA DE ZONA") {
+      return `BORDE DE ZONA · ${selectedMission.city}`;
+    }
+    return `CALIBRANDO EN ${selectedMission.city}`;
+  }, [
+    currentThermal,
+    selectedMission,
+    hasKnownPlayerCoords,
+    selectedMissionMacroDist,
+    pingData?.thermalState,
+    thermalStyle.subtitle,
+  ]);
+
   // Enable QR Scanner when thermalState === 'QUEMANDO' (<30m) with mobile GPS jitter tolerance
   const canOpenScanner = Boolean(
     missionValidationMode !== "PRESENTIAL_GPS" &&
@@ -733,6 +879,7 @@ export function RadarGameClient({
         if (fresh) {
           activeCoords = fresh;
           setHasLiveGpsFix(true);
+          setCoordsOrigin("live");
           setCoords(fresh);
         }
       }
@@ -920,23 +1067,157 @@ export function RadarGameClient({
               </div>
             )}
 
-            {/* ACTIVE MISSION DISPLAY (LOCK TO THE CURRENT HUNT, NO BULKY FULL-SCREEN DROPDOWN) */}
+            {/* COMPACT ACTIVE MISSION SELECTOR & PROXIMITY BAR */}
             {selectedMission && (
-              <div className="rf-panel rf-panel-cyan px-2.5 py-1.5 flex items-center justify-between gap-2 shadow-md">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
-                  <p className="font-handjet font-extrabold text-xs uppercase tracking-wide text-white truncate">
-                    <span className="text-cyan-400 font-bold">
-                      [{selectedMission.city}]
-                    </span>{" "}
-                    <span>{selectedMission.title}</span>
-                  </p>
-                </div>
-                <span className="rf-nameplate text-[9px] text-emerald-300 shrink-0 py-0.5 px-1.5 border-emerald-500/50">
-                  {selectedMission.status === "CAPTURED"
-                    ? "CAPTURADO"
-                    : "DROP ACTIVO"}
-                </span>
+              <div ref={missionSelectorRef} className="relative">
+                {(() => {
+                  const statusLabel =
+                    selectedMission.status === "CAPTURED"
+                      ? "CAPTURADO"
+                      : selectedMission.status === "PAUSED"
+                      ? "PAUSADO"
+                      : "DROP ACTIVO";
+                  const statusClass =
+                    selectedMission.status === "CAPTURED"
+                      ? "text-amber-300 border-amber-500/50"
+                      : selectedMission.status === "PAUSED"
+                      ? "text-slate-300 border-slate-500/50"
+                      : "text-emerald-300 border-emerald-500/50";
+                  const barInner = (
+                    <>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span
+                          className={`w-2 h-2 rounded-full shrink-0 ${
+                            selectedMission.status === "ACTIVE"
+                              ? "bg-emerald-400 animate-ping"
+                              : "bg-amber-400"
+                          }`}
+                        />
+                        <p className="font-handjet font-extrabold text-xs uppercase tracking-wide text-white truncate">
+                          <span className="text-cyan-400 font-bold">
+                            [{selectedMission.city}]
+                          </span>{" "}
+                          <span>{selectedMission.title}</span>
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className={`rf-nameplate text-[9px] py-0.5 px-1.5 ${statusClass}`}
+                        >
+                          {statusLabel}
+                        </span>
+                        {missions.length > 1 && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-400/50 text-[9px] font-bold text-cyan-200">
+                            <span>{missions.length}</span>
+                            {missionMenuOpen ? (
+                              <ChevronUp className="w-3 h-3" />
+                            ) : (
+                              <ChevronDown className="w-3 h-3" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  );
+
+                  return missions.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setMissionMenuOpen((prev) => !prev)}
+                      aria-expanded={missionMenuOpen}
+                      aria-label="Cambiar misión activa"
+                      className="w-full rf-panel rf-panel-cyan px-2.5 py-1.5 flex items-center justify-between gap-2 shadow-md text-left hover:border-cyan-300/80 transition-colors cursor-pointer"
+                    >
+                      {barInner}
+                    </button>
+                  ) : (
+                    <div className="rf-panel rf-panel-cyan px-2.5 py-1.5 flex items-center justify-between gap-2 shadow-md">
+                      {barInner}
+                    </div>
+                  );
+                })()}
+
+                {missions.length > 1 && missionMenuOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-30 rf-panel rf-panel-cyan bg-[#0d061f]/95 backdrop-blur-md p-1.5 shadow-2xl max-h-56 overflow-y-auto space-y-1">
+                    <div className="px-1.5 py-0.5 flex items-center justify-between text-[9px] uppercase tracking-wider text-cyan-300/80 font-bold border-b border-cyan-500/20">
+                      <span>Misiones ({missions.length})</span>
+                      <span>
+                        {hasKnownPlayerCoords
+                          ? "Por cercanía GPS"
+                          : "Por ciudad"}
+                      </span>
+                    </div>
+                    {rankedMissions.map(
+                      ({ mission, distanceMeters, isInZone }) => {
+                        const isSelected = mission.id === selectedMission.id;
+                        const isActive = mission.status === "ACTIVE";
+                        const distBadge = !isActive
+                          ? mission.status === "CAPTURED"
+                            ? "CAPTURADO"
+                            : "PAUSADO"
+                          : hasKnownPlayerCoords
+                          ? isInZone
+                            ? "EN ZONA"
+                            : formatMacroZoneDistance(distanceMeters)
+                          : "ACTIVA";
+
+                        return (
+                          <button
+                            key={mission.id}
+                            type="button"
+                            onClick={() => {
+                              userPickedMissionRef.current = true;
+                              setSelectedMissionId(mission.id);
+                              setMissionMenuOpen(false);
+                            }}
+                            className={`w-full px-2 py-1.5 rounded border text-left flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                              isSelected
+                                ? "bg-cyan-500/20 border-cyan-400 text-white"
+                                : "bg-[#150b2e]/85 border-cyan-500/25 text-slate-200 hover:border-cyan-400/60"
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                    isActive
+                                      ? "bg-emerald-400"
+                                      : "bg-amber-400"
+                                  }`}
+                                />
+                                <p className="font-handjet font-bold text-xs uppercase truncate">
+                                  <span className="text-cyan-300">
+                                    [{mission.city}]
+                                  </span>{" "}
+                                  <span>{mission.title}</span>
+                                </p>
+                              </div>
+                              <p className="text-[10px] text-amber-300/90 truncate pl-3">
+                                {mission.prizeTitle}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span
+                                className={`px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase ${
+                                  !isActive
+                                    ? "bg-amber-950/60 border-amber-500/40 text-amber-300"
+                                    : isInZone && hasKnownPlayerCoords
+                                    ? "bg-emerald-950/70 border-emerald-400/60 text-emerald-300"
+                                    : "bg-slate-900/80 border-cyan-500/35 text-cyan-200"
+                                }`}
+                              >
+                                {distBadge}
+                              </span>
+                              {isSelected && (
+                                <Check className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+                              )}
+                            </div>
+                          </button>
+                        );
+                      }
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -958,7 +1239,7 @@ export function RadarGameClient({
                   {thermalStyle.title}
                 </span>
                 <span className="font-handjet font-bold text-xs uppercase tracking-wider opacity-95">
-                  {thermalStyle.subtitle}
+                  {thermalSubtitle}
                 </span>
               </div>
             </div>
@@ -1030,7 +1311,10 @@ export function RadarGameClient({
                   </span>
                   <button
                     type="button"
-                    onClick={() => setGpsMode("real")}
+                    onClick={() => {
+                      setGpsMode("real");
+                      setCoordsOrigin(hasLiveGpsFix ? "live" : "fallback");
+                    }}
                     className={`px-2 py-0.5 rf-btn-steel text-[9px] ${
                       gpsMode === "real" ? "opacity-100" : "opacity-60"
                     }`}
