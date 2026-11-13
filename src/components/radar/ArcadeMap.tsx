@@ -757,34 +757,103 @@ export function ArcadeMap({
   useEffect(() => {
     if (!compassEnabled || mode !== "player") return;
     let active = true;
+    let hasAbsoluteSource = false;
+    let targetHeading: number | null = null;
+    let currentHeading: number | null = mapRef.current
+      ? ((mapRef.current.getBearing() % 360) + 360) % 360
+      : null;
+    let rafId: number | null = null;
 
-    const handleOrientation = (ev: DeviceOrientationEvent) => {
+    const normalizeDeg = (deg: number) => ((deg % 360) + 360) % 360;
+    const shortestDelta = (from: number, to: number) => ((to - from + 540) % 360) - 180;
+
+    const applySmoothStep = () => {
+      rafId = null;
+      if (!active || !mapRef.current || targetHeading === null || currentHeading === null) {
+        return;
+      }
+      const delta = shortestDelta(currentHeading, targetHeading);
+      if (Math.abs(delta) < 0.35) {
+        currentHeading = targetHeading;
+        try {
+          if (Math.abs(shortestDelta(mapRef.current.getBearing(), targetHeading)) >= 0.35) {
+            mapRef.current.setBearing(targetHeading);
+          }
+        } catch {}
+        return;
+      }
+      currentHeading = normalizeDeg(currentHeading + delta * 0.22);
+      try {
+        mapRef.current.setBearing(currentHeading);
+      } catch {}
+      rafId = window.requestAnimationFrame(applySmoothStep);
+    };
+
+    const processOrientation = (ev: DeviceOrientationEvent, fromAbsoluteEvent: boolean) => {
       if (!active || !mapRef.current) return;
       const extEv = ev as DeviceOrientationEvent & {
         webkitCompassHeading?: number;
       };
-      let heading: number | null = null;
-      if (typeof extEv.webkitCompassHeading === "number") {
-        heading = extEv.webkitCompassHeading;
-      } else if (typeof ev.alpha === "number") {
-        heading = (360 - ev.alpha) % 360;
+      const isAbsoluteSample =
+        fromAbsoluteEvent ||
+        ev.absolute === true ||
+        typeof extEv.webkitCompassHeading === "number";
+
+      if (isAbsoluteSample) {
+        hasAbsoluteSource = true;
+      } else if (hasAbsoluteSource) {
+        // Android Chrome fires both relative `deviceorientation` and magnetic `deviceorientationabsolute`
+        // in incompatible coordinate frames; ignore relative ticks once absolute data is available.
+        return;
       }
-      if (heading !== null && Number.isFinite(heading)) {
+
+      let rawHeading: number | null = null;
+      if (
+        typeof extEv.webkitCompassHeading === "number" &&
+        Number.isFinite(extEv.webkitCompassHeading)
+      ) {
+        rawHeading = extEv.webkitCompassHeading;
+      } else if (typeof ev.alpha === "number" && Number.isFinite(ev.alpha)) {
+        const screenAngle =
+          typeof window.screen?.orientation?.angle === "number"
+            ? window.screen.orientation.angle
+            : 0;
+        rawHeading = 360 - ev.alpha + screenAngle;
+      }
+      if (rawHeading === null || !Number.isFinite(rawHeading)) return;
+
+      const heading = normalizeDeg(rawHeading);
+      if (targetHeading !== null && Math.abs(shortestDelta(targetHeading, heading)) < 0.8) {
+        return;
+      }
+      targetHeading = heading;
+
+      if (currentHeading === null) {
+        currentHeading = heading;
         try {
-          mapRef.current.setBearing(heading);
+          mapRef.current.setBearing(currentHeading);
         } catch {}
+        return;
+      }
+      if (rafId === null) {
+        rafId = window.requestAnimationFrame(applySmoothStep);
       }
     };
 
-    window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener);
-    window.addEventListener("deviceorientation", handleOrientation);
+    const handleAbsoluteOrientation = (ev: Event) =>
+      processOrientation(ev as DeviceOrientationEvent, true);
+    const handleRelativeOrientation = (ev: DeviceOrientationEvent) =>
+      processOrientation(ev, false);
+
+    window.addEventListener("deviceorientationabsolute", handleAbsoluteOrientation);
+    window.addEventListener("deviceorientation", handleRelativeOrientation);
     return () => {
       active = false;
-      window.removeEventListener(
-        "deviceorientationabsolute",
-        handleOrientation as EventListener
-      );
-      window.removeEventListener("deviceorientation", handleOrientation);
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      window.removeEventListener("deviceorientationabsolute", handleAbsoluteOrientation);
+      window.removeEventListener("deviceorientation", handleRelativeOrientation);
     };
   }, [compassEnabled, mode]);
 

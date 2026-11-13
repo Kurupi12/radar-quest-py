@@ -558,18 +558,21 @@ export interface TreeFeatureCollection {
 /**
  * Generates deterministic GeoJSON tree features across a bounding box
  */
-export function generateRpgTreesGeoJson(bounds: TreeBounds): TreeFeatureCollection {
+function computeTreeLodStep(bounds: TreeBounds): number {
   const baseStep = 0.00035; // ~38 meters per cell
   const lngSpan = Math.max(0.0001, bounds.east - bounds.west);
   const latSpan = Math.max(0.0001, bounds.north - bounds.south);
   const estCells = (lngSpan / baseStep) * (latSpan / baseStep);
   // Discrete deterministic grid LOD tiers keep tree positions locked when panning while staying 60fps zoomed out
-  const step =
-    estCells > 14_000
-      ? baseStep * 4
-      : estCells > 3_600
-      ? baseStep * 2
-      : baseStep;
+  return estCells > 14_000
+    ? baseStep * 4
+    : estCells > 3_600
+    ? baseStep * 2
+    : baseStep;
+}
+
+export function generateRpgTreesGeoJson(bounds: TreeBounds): TreeFeatureCollection {
+  const step = computeTreeLodStep(bounds);
   const features: TreeFeature[] = [];
 
   const startX = Math.floor(bounds.west / step);
@@ -682,23 +685,56 @@ export function setRpgTreesVisibility(
 /**
  * Syncs the procedural RPG tree layer based on current map viewport bounds
  */
+const syncedRpgTreesCache = new WeakMap<
+  MapLibreMap,
+  { paddedBounds: TreeBounds; zoom: number }
+>();
+
 export function syncRpgTreesOnMap(map: MapLibreMap): void {
   if (!map.getStyle()) return;
-  registerAllRpgTextures(map);
 
   const bounds = map.getBounds();
-  const lngSpan = bounds.getEast() - bounds.getWest();
-  const latSpan = bounds.getNorth() - bounds.getSouth();
+  const viewBounds: TreeBounds = {
+    west: bounds.getWest(),
+    east: bounds.getEast(),
+    south: bounds.getSouth(),
+    north: bounds.getNorth(),
+  };
+  const zoom = map.getZoom();
+  const existingSource = map.getSource(RPG_TREES_SOURCE_ID) as GeoJSONSource | undefined;
+  const cached = syncedRpgTreesCache.get(map);
+
+  // Rotation around the same center fires moveend at high frequency; skip rebuilding when
+  // the viewport stays within the cached padded bounds and zoom hasn't meaningfully changed.
+  if (
+    existingSource &&
+    map.getLayer(RPG_TREES_LAYER_ID) &&
+    cached &&
+    Math.abs(zoom - cached.zoom) < 0.35 &&
+    viewBounds.west >= cached.paddedBounds.west &&
+    viewBounds.east <= cached.paddedBounds.east &&
+    viewBounds.south >= cached.paddedBounds.south &&
+    viewBounds.north <= cached.paddedBounds.north
+  ) {
+    return;
+  }
+
+  registerAllRpgTextures(map);
+
+  const lngSpan = viewBounds.east - viewBounds.west;
+  const latSpan = viewBounds.north - viewBounds.south;
+  // Use dominant viewport span so full 360° compass rotation stays inside cached bounds
+  const padSpan = Math.max(lngSpan, latSpan) * 0.38;
 
   const paddedBounds: TreeBounds = {
-    west: bounds.getWest() - lngSpan * 0.35,
-    east: bounds.getEast() + lngSpan * 0.35,
-    south: bounds.getSouth() - latSpan * 0.35,
-    north: bounds.getNorth() + latSpan * 0.35,
+    west: viewBounds.west - padSpan,
+    east: viewBounds.east + padSpan,
+    south: viewBounds.south - padSpan,
+    north: viewBounds.north + padSpan,
   };
 
   const geojson = generateRpgTreesGeoJson(paddedBounds);
-  const existingSource = map.getSource(RPG_TREES_SOURCE_ID) as GeoJSONSource | undefined;
+  syncedRpgTreesCache.set(map, { paddedBounds, zoom });
 
   if (existingSource) {
     existingSource.setData(geojson);
