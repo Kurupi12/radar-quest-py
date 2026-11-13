@@ -423,6 +423,7 @@ export function RadarGameClient({
   const [triangulateToastMsg, setTriangulateToastMsg] = useState<string | null>(
     null
   );
+  const [pulseRecenterTrigger, setPulseRecenterTrigger] = useState(0);
 
   // #8 Brand Leaderboard & Personal Hunter History
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
@@ -596,6 +597,7 @@ export function RadarGameClient({
     }
     setTriangulating(true);
     setTriangulateToastMsg(null);
+    setPulseRecenterTrigger((n) => n + 1);
     try {
       const res = await fetch("/api/radar/triangulate", {
         method: "POST",
@@ -1319,6 +1321,7 @@ export function RadarGameClient({
             theme={mapTheme}
             onThemeChange={setMapTheme}
             bonusBeacons={isMissionPaused ? [] : pingData?.bonusNodes || []}
+            recenterTrigger={pulseRecenterTrigger}
             onCanvasReady={(c) => {
               mapCanvasRef.current = c;
             }}

@@ -60,6 +60,7 @@ interface ArcadeMapProps {
   showHeatmap?: boolean;
   onSelectCoord?: (lat: number, lng: number) => void;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
+  recenterTrigger?: number;
 }
 
 const CARTO_DARK_VECTOR_STYLE =
@@ -229,6 +230,7 @@ export function ArcadeMap({
   showHeatmap = false,
   onSelectCoord,
   onCanvasReady,
+  recenterTrigger = 0,
 }: ArcadeMapProps) {
   const [internalTheme, setInternalTheme] = useState<ArcadeMapTheme>(CURRENT_MAP_THEME);
   const activeTheme: ArcadeMapTheme = theme || internalTheme;
@@ -238,6 +240,9 @@ export function ArcadeMap({
   const [isUserPanned, setIsUserPanned] = useState(false);
   const isUserPannedRef = useRef(false);
   const [compassEnabled, setCompassEnabled] = useState(false);
+  const compassEnabledRef = useRef(false);
+  compassEnabledRef.current = compassEnabled;
+  const lastRecenterTriggerRef = useRef(0);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -817,6 +822,27 @@ export function ArcadeMap({
       duration: 500,
     });
   }, []);
+
+  useEffect(() => {
+    if (
+      recenterTrigger <= 0 ||
+      recenterTrigger === lastRecenterTriggerRef.current
+    ) {
+      return;
+    }
+    lastRecenterTriggerRef.current = recenterTrigger;
+    isUserPannedRef.current = false;
+    setIsUserPanned(false);
+    const map = mapRef.current;
+    if (!map) return;
+    map.easeTo({
+      center: [latestCoordsRef.current.lng, latestCoordsRef.current.lat],
+      zoom,
+      bearing: compassEnabledRef.current ? map.getBearing() : 0,
+      duration: 420,
+      essential: true,
+    });
+  }, [recenterTrigger, zoom]);
 
   const handleToggleCompass = useCallback(async () => {
     if (compassEnabled) {
