@@ -4,15 +4,12 @@ import { useState } from "react";
 import { Award, CheckCircle2, ExternalLink, MapPin, QrCode, X } from "lucide-react";
 import type { Brand, Hunter, PublicBrand, RadarClaimResponse } from "@/types/radar";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
-import { getFreshGpsCoords } from "@/lib/radar/geo";
 
 interface QrClaimModalProps {
   brand: Brand | PublicBrand;
   hunter: Hunter;
   sessionToken: string;
   currentCoords: { lat: number; lng: number; accuracy: number } | null;
-  gpsMode?: "real" | "simulator";
-  hasLiveGpsFix?: boolean;
   suggestedCode?: string;
   initialResult?: RadarClaimResponse | null;
   onClose: () => void;
@@ -24,8 +21,6 @@ export function QrClaimModal({
   hunter,
   sessionToken,
   currentCoords,
-  gpsMode = "real",
-  hasLiveGpsFix = true,
   suggestedCode = "",
   initialResult = null,
   onClose,
@@ -43,17 +38,27 @@ export function QrClaimModal({
     setResult(null);
 
     try {
-      const liveFallback = hasLiveGpsFix ? currentCoords : null;
-      const coords =
-        gpsMode === "simulator" && currentCoords
-          ? currentCoords
-          : await getFreshGpsCoords(liveFallback, 6000);
+      let coords = currentCoords;
+      if (!coords && typeof navigator !== "undefined" && navigator.geolocation) {
+        coords = await new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) =>
+              resolve({
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy || 10,
+              }),
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 6000 }
+          );
+        });
+      }
 
       if (!coords) {
         setResult({
           ok: false,
           message:
-            "No pudimos leer tu GPS actual. Activá la ubicación precisa en tu navegador o usá el Simulador Demo en PC.",
+            "No pudimos leer tu GPS actual. Activá la ubicación o usá el Simulador Demo en PC.",
         });
         setLoading(false);
         return;

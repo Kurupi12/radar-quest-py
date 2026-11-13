@@ -1,10 +1,4 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import {
-  BRAND_SESSION_COOKIE,
-  hasSuperAdminAccess,
-  verifyBrandSessionToken,
-} from "@/lib/auth/adminAuth";
 import { findMissionById } from "@/lib/db/store";
 
 export async function POST(request: Request) {
@@ -15,34 +9,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const isDemoRestricted =
-    process.env.NODE_ENV === "production" &&
-    process.env.ENABLE_RADAR_DEMO !== "true";
-
   try {
-    let superAdmin = false;
-    let brandSession = null;
-
-    if (isDemoRestricted) {
-      superAdmin = await hasSuperAdminAccess(request);
-      if (!superAdmin) {
-        const cookieStore = await cookies();
-        brandSession = verifyBrandSessionToken(
-          cookieStore.get(BRAND_SESSION_COOKIE)?.value
-        );
-        if (!brandSession) {
-          return NextResponse.json(
-            {
-              ok: false,
-              message:
-                "Simulador deshabilitado en producción. Inicia sesión como administrador de marca o super-admin.",
-            },
-            { status: 403 }
-          );
-        }
-      }
-    }
-
     const body = await request.json();
     const missionId = String(body.missionId || "");
     const preset = String(body.preset || "TIBIO");
@@ -52,21 +19,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, message: "Misión no encontrada." },
         { status: 404 }
-      );
-    }
-
-    if (
-      isDemoRestricted &&
-      !superAdmin &&
-      brandSession?.brandId !== mission.brandId
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message:
-            "Tu sesión de marca no tiene permisos para simular misiones de otro comercio.",
-        },
-        { status: 403 }
       );
     }
 

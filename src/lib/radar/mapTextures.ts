@@ -651,24 +651,6 @@ export function registerAllRpgTextures(map: MapLibreMap): void {
   }
 }
 
-export function setRpgTreesVisibility(
-  map: MapLibreMap,
-  visible: boolean
-): void {
-  if (!map.isStyleLoaded()) return;
-  try {
-    if (map.getLayer(RPG_TREES_LAYER_ID)) {
-      map.setLayoutProperty(
-        RPG_TREES_LAYER_ID,
-        "visibility",
-        visible ? "visible" : "none"
-      );
-    }
-  } catch {
-    // Ignore if layer does not exist yet
-  }
-}
-
 /**
  * Syncs the procedural RPG tree layer based on current map viewport bounds
  */

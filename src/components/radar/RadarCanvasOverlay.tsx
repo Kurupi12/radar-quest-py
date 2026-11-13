@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { ClimaxLevel, ThermalState } from "@/types/radar";
+import type { ThermalState } from "@/types/radar";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
 import {
   calculateBearingDegrees,
@@ -21,16 +21,8 @@ interface FireParticle {
   color: string;
 }
 
-export interface TriangulationSectorOverlay {
-  sectorCode: string;
-  sectorLabel: string;
-  centerBearingDeg: number;
-  expiresAtMs: number;
-}
-
 interface RadarCanvasOverlayProps {
   thermalState: ThermalState;
-  climaxLevel?: ClimaxLevel | null;
   inVehicleMode: boolean;
   dangerAlertActive: boolean;
   speedKmh?: number;
@@ -38,10 +30,6 @@ interface RadarCanvasOverlayProps {
   primaryColor?: string;
   secondaryColor?: string;
   active?: boolean;
-  triangulationSector?: TriangulationSectorOverlay | null;
-  iceCrackLevel?: number;
-  iceShatterNonce?: number;
-  onFrozenStateChange?: (frozen: boolean) => void;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
 }
 
@@ -223,7 +211,6 @@ function drawHunterSprite16Bit(
 
 export function RadarCanvasOverlay({
   thermalState,
-  climaxLevel = null,
   inVehicleMode,
   dangerAlertActive,
   speedKmh = 0,
@@ -231,19 +218,10 @@ export function RadarCanvasOverlay({
   primaryColor = "#a855f7",
   secondaryColor = "#00f0ff",
   active = true,
-  triangulationSector = null,
-  iceCrackLevel = 0,
-  iceShatterNonce = 0,
-  onFrozenStateChange,
   onCanvasReady,
 }: RadarCanvasOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const walkImagesRef = useRef<Record<CardinalDirection4, HTMLImageElement[]>>({
-    south: [],
-    north: [],
-    east: [],
-    west: [],
-  });
+  const walkImagesRef = useRef<HTMLImageElement[]>([]);
   const jumpImagesRef = useRef<HTMLImageElement[]>([]);
   const directionalImagesRef = useRef<{
     south: HTMLImageElement | null;
@@ -253,19 +231,13 @@ export function RadarCanvasOverlay({
   }>({ south: null, north: null, east: null, west: null });
   const flamesImgRef = useRef<HTMLImageElement | null>(null);
   const onCanvasReadyRef = useRef(onCanvasReady);
-  const onFrozenStateChangeRef = useRef(onFrozenStateChange);
 
   useEffect(() => {
     onCanvasReadyRef.current = onCanvasReady;
   }, [onCanvasReady]);
 
-  useEffect(() => {
-    onFrozenStateChangeRef.current = onFrozenStateChange;
-  }, [onFrozenStateChange]);
-
   const stateRef = useRef({
     thermalState,
-    climaxLevel,
     inVehicleMode,
     dangerAlertActive,
     speedKmh,
@@ -273,28 +245,17 @@ export function RadarCanvasOverlay({
     primaryColor,
     secondaryColor,
     active,
-    triangulationSector,
-    iceCrackLevel,
-    iceShatterNonce,
   });
 
-  // Preload PixelLab 4D walk & jump celebration animation frames, directional idle poses & thermal flames spritesheet
+  // Preload PixelLab walk & jump celebration animation frames, directional idle poses & thermal flames spritesheet
   useEffect(() => {
-    const dirs: CardinalDirection4[] = ["south", "north", "east", "west"];
-    const nextWalk: Record<CardinalDirection4, HTMLImageElement[]> = {
-      south: [],
-      north: [],
-      east: [],
-      west: [],
-    };
-    for (const dir of dirs) {
-      for (let i = 0; i < 9; i++) {
-        const img = new Image();
-        img.src = `/sprites/walk_${dir}/frame_${i}.png`;
-        nextWalk[dir].push(img);
-      }
+    const walkImages: HTMLImageElement[] = [];
+    for (let i = 0; i < 9; i++) {
+      const img = new Image();
+      img.src = `/sprites/walk_south/frame_${i}.png`;
+      walkImages.push(img);
     }
-    walkImagesRef.current = nextWalk;
+    walkImagesRef.current = walkImages;
 
     const jumpImages: HTMLImageElement[] = [];
     for (let i = 0; i < 9; i++) {
@@ -323,7 +284,6 @@ export function RadarCanvasOverlay({
 
   stateRef.current = {
     thermalState,
-    climaxLevel,
     inVehicleMode,
     dangerAlertActive,
     speedKmh,
@@ -331,9 +291,6 @@ export function RadarCanvasOverlay({
     primaryColor,
     secondaryColor,
     active,
-    triangulationSector,
-    iceCrackLevel,
-    iceShatterNonce,
   };
 
   useEffect(() => {
@@ -363,30 +320,11 @@ export function RadarCanvasOverlay({
     let nextFreezeIntervalTicks = 900; // Primer congelamiento ocurre tras ~15 segundos de exploración en frío
     let lastCycleEndTick = 0;
     let frozenFrameIdx = 0;
-    let lastSeenShatterNonce = stateRef.current.iceShatterNonce;
-
-    const emitIceBurst = (cx: number, cy: number, count = 16) => {
-      for (let k = 0; k < count; k++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 1.4 + Math.random() * 2.8;
-        particles.push({
-          x: cx + (Math.random() - 0.5) * 16,
-          y: cy + (Math.random() - 0.5) * 20,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed + 0.6,
-          size: Math.random() > 0.4 ? 3 : 2,
-          life: 0,
-          maxLife: 22 + Math.floor(Math.random() * 16),
-          color: Math.random() > 0.5 ? "#bae6fd" : "#ffffff",
-        });
-      }
-    };
 
     const renderFrame = () => {
       tick += 1;
       const {
         thermalState: currentThermal,
-        climaxLevel: currentClimaxLevel,
         inVehicleMode: vehicle,
         dangerAlertActive: danger,
         speedKmh: currentSpeedKmh,
@@ -394,24 +332,10 @@ export function RadarCanvasOverlay({
         primaryColor: pColor,
         secondaryColor: sColor,
         active: isOverlayActive,
-        triangulationSector: activeSector,
-        iceCrackLevel: crackLevel,
-        iceShatterNonce: shatterNonce,
       } = stateRef.current;
 
       const cx = LOGICAL_WIDTH / 2;
       const cy = LOGICAL_HEIGHT / 2;
-
-      if (shatterNonce !== lastSeenShatterNonce) {
-        lastSeenShatterNonce = shatterNonce;
-        if (freezeState === "FROZEN") {
-          freezeState = "NORMAL";
-          lastCycleEndTick = tick;
-          nextFreezeIntervalTicks = Math.floor(1800 + Math.random() * 2100);
-          emitIceBurst(cx, cy, 22);
-          onFrozenStateChangeRef.current?.(false);
-        }
-      }
 
       // Detección de rumbo y orientación 4D del cazador a partir del movimiento GPS
       if (currentCoords && currentCoords.lat && currentCoords.lng) {
@@ -462,11 +386,10 @@ export function RadarCanvasOverlay({
           if (tick - lastCycleEndTick >= nextFreezeIntervalTicks) {
             freezeState = "FROZEN";
             freezeStartTick = tick;
-            // Duración del frizado: 1.5s a 2.5s (o menos si el usuario lo rompe tocando)
-            freezeDurationTicks = Math.floor(110 + Math.random() * 45);
+            // Duración del frizado: 1.5s a 2.0s (90 a 120 frames a 60fps)
+            freezeDurationTicks = Math.floor(90 + Math.random() * 30);
             frozenFrameIdx = Math.floor(tick / 6) % 9;
             arcadeHardware.playFreezeSound();
-            onFrozenStateChangeRef.current?.(true);
           }
         } else if (freezeState === "FROZEN") {
           if (tick - freezeStartTick >= freezeDurationTicks) {
@@ -474,15 +397,28 @@ export function RadarCanvasOverlay({
             lastCycleEndTick = tick;
             // Próximo ciclo en intervalo mucho más espaciado: entre 30s y 65s (1.800 a 3.900 frames a 60fps)
             nextFreezeIntervalTicks = Math.floor(1800 + Math.random() * 2100);
-            emitIceBurst(cx, cy, 14);
-            onFrozenStateChangeRef.current?.(false);
+
+            // Explosión de esquirlas de hielo en abanico al descongelarse
+            for (let k = 0; k < 14; k++) {
+              const angle = Math.random() * Math.PI * 2;
+              const speed = 1.2 + Math.random() * 2.5;
+              particles.push({
+                x: cx + (Math.random() - 0.5) * 16,
+                y: cy + (Math.random() - 0.5) * 20,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed + 0.8,
+                size: Math.random() > 0.4 ? 3 : 2,
+                life: 0,
+                maxLife: 22 + Math.floor(Math.random() * 16),
+                color: Math.random() > 0.5 ? "#bae6fd" : "#ffffff",
+              });
+            }
           }
         }
       } else {
         if (freezeState === "FROZEN") {
           freezeState = "NORMAL";
           lastCycleEndTick = tick;
-          onFrozenStateChangeRef.current?.(false);
         }
         // Al salir y volver a entrar a zona fría, esperar al menos 30s a 50s
         nextFreezeIntervalTicks = Math.floor(1800 + Math.random() * 1200);
@@ -505,53 +441,6 @@ export function RadarCanvasOverlay({
       }
       ctx.restore();
 
-      // 1b. Active Triangulation 45° Sector Sweep Overlay (expires automatically)
-      const nowMs = Date.now();
-      if (activeSector && nowMs < activeSector.expiresAtMs) {
-        const remainingRatio = Math.max(
-          0,
-          Math.min(1, (activeSector.expiresAtMs - nowMs) / 4000)
-        );
-        const startRad =
-          ((activeSector.centerBearingDeg - 22.5 - 90) * Math.PI) / 180;
-        const endRad =
-          ((activeSector.centerBearingDeg + 22.5 - 90) * Math.PI) / 180;
-        const midRad = ((activeSector.centerBearingDeg - 90) * Math.PI) / 180;
-        const wedgeRadius = 152;
-
-        ctx.save();
-        ctx.globalAlpha = 0.25 + Math.sin(tick * 0.24) * 0.12 * remainingRatio;
-        ctx.fillStyle = sColor || "#00f0ff";
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.arc(cx, cy, wedgeRadius, startRad, endRad);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.globalAlpha = 0.9 * remainingRatio;
-        ctx.strokeStyle = "#fde047";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.arc(cx, cy, wedgeRadius, startRad, endRad);
-        ctx.closePath();
-        ctx.stroke();
-
-        // Sector beacon text at edge of cone
-        const labelX = cx + Math.cos(midRad) * 114;
-        const labelY = cy + Math.sin(midRad) * 114;
-        ctx.fillStyle = "rgba(9, 13, 22, 0.88)";
-        ctx.fillRect(labelX - 38, labelY - 10, 76, 18);
-        ctx.strokeStyle = "#fde047";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(labelX - 38, labelY - 10, 76, 18);
-        ctx.fillStyle = "#fde047";
-        ctx.font = "900 9px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(`SECTOR ${activeSector.sectorCode}`, labelX, labelY + 2);
-        ctx.restore();
-      }
-
       // 2. Concentric Thermal Waves
       const maxRadius = 150;
       for (let i = 0; i < cfg.ringCount; i++) {
@@ -560,54 +449,13 @@ export function RadarCanvasOverlay({
         drawPixelCircle(ctx, cx, cy, r, cfg.ring, alpha);
       }
 
-      // Inner pulsing core ring + Non-leaking Climax sub-progression (<30m)
-      const corePulse =
-        (currentClimaxLevel === 3 ? 14 : currentClimaxLevel === 2 ? 17 : 20) +
-        Math.sin(tick * (currentClimaxLevel ? 0.2 : 0.12)) * 4;
-      drawPixelCircle(ctx, cx, cy, corePulse, cfg.core, 0.78);
-
-      if (currentThermal === "QUEMANDO" && currentClimaxLevel) {
-        ctx.save();
-        const bracketSize =
-          currentClimaxLevel === 3 ? 34 : currentClimaxLevel === 2 ? 42 : 52;
-        ctx.strokeStyle =
-          currentClimaxLevel === 3
-            ? "#fde047"
-            : currentClimaxLevel === 2
-            ? "#fb923c"
-            : "#ff0055";
-        ctx.lineWidth = currentClimaxLevel === 3 ? 3 : 2;
-        const arm = 10;
-        const x0 = cx - bracketSize;
-        const x1 = cx + bracketSize;
-        const y0 = cy - bracketSize;
-        const y1 = cy + bracketSize;
-        // 4 pixel lock-on corners
-        ctx.beginPath();
-        ctx.moveTo(x0, y0 + arm);
-        ctx.lineTo(x0, y0);
-        ctx.lineTo(x0 + arm, y0);
-        ctx.moveTo(x1 - arm, y0);
-        ctx.lineTo(x1, y0);
-        ctx.lineTo(x1, y0 + arm);
-        ctx.moveTo(x0, y1 - arm);
-        ctx.lineTo(x0, y1);
-        ctx.lineTo(x0 + arm, y1);
-        ctx.moveTo(x1 - arm, y1);
-        ctx.lineTo(x1, y1);
-        ctx.lineTo(x1, y1 - arm);
-        ctx.stroke();
-        ctx.restore();
-      }
+      // Inner pulsing core ring
+      const corePulse = 20 + Math.sin(tick * 0.12) * 4;
+      drawPixelCircle(ctx, cx, cy, corePulse, cfg.core, 0.72);
 
       // 3. Spawn & Render Pixel Fire / Heat Embers at 60 FPS
       if (cfg.firePalette.length > 0) {
-        const spawnCount =
-          currentThermal === "QUEMANDO"
-            ? currentClimaxLevel === 3
-              ? 5
-              : 3
-            : 1;
+        const spawnCount = currentThermal === "QUEMANDO" ? 3 : 1;
         for (let s = 0; s < spawnCount; s++) {
           const angle = Math.random() * Math.PI * 2;
           const dist = 10 + Math.random() * (currentThermal === "QUEMANDO" ? 44 : 26);
@@ -709,18 +557,40 @@ export function RadarCanvasOverlay({
             ctx.drawImage(jumpImg, targetX, targetY, drawSize, drawSize);
           }
         } else if (isMoving) {
-          // ESTADO: CAMINANDO EN 4D (spritesheets nativos PixelLab para S/N/E/O)
-          const walkList = walkImagesRef.current[facingDirection] || walkImagesRef.current.south;
+          // ESTADO: CAMINANDO (animación de pasos activa con cadencia según velocidad)
+          const walkList = walkImagesRef.current;
           const walkFrame = Math.floor(walkStepPhase) % (walkList.length || 9);
-          const walkImg = walkList[walkFrame];
-          if (walkImg && walkImg.complete && walkImg.naturalWidth > 0) {
-            ctx.drawImage(walkImg, targetX, targetY, drawSize, drawSize);
+          const stepBob = Math.sin(walkStepPhase * Math.PI * 2) > 0 ? -1 : 0;
+
+          if (facingDirection === "south") {
+            const walkImg = walkList[walkFrame];
+            if (walkImg && walkImg.complete && walkImg.naturalWidth > 0) {
+              ctx.drawImage(walkImg, targetX, targetY, drawSize, drawSize);
+            }
+          } else if (facingDirection === "west") {
+            const westImg = directionalImagesRef.current.west;
+            if (westImg && westImg.complete && westImg.naturalWidth > 0) {
+              ctx.drawImage(westImg, targetX, targetY + stepBob, drawSize, drawSize);
+            } else {
+              const walkImg = walkList[walkFrame];
+              if (walkImg && walkImg.complete && walkImg.naturalWidth > 0) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.scale(-1, 1);
+                ctx.drawImage(walkImg, -drawSize / 2, -drawSize / 2 - 1, drawSize, drawSize);
+                ctx.restore();
+              }
+            }
+          } else if (facingDirection === "east") {
+            const eastImg = directionalImagesRef.current.east;
+            if (eastImg && eastImg.complete && eastImg.naturalWidth > 0) {
+              ctx.drawImage(eastImg, targetX, targetY + stepBob, drawSize, drawSize);
+            }
           } else {
-            const fallbackDirImg =
-              directionalImagesRef.current[facingDirection] ||
-              directionalImagesRef.current.south;
-            if (fallbackDirImg && fallbackDirImg.complete && fallbackDirImg.naturalWidth > 0) {
-              ctx.drawImage(fallbackDirImg, targetX, targetY, drawSize, drawSize);
+            // north
+            const northImg = directionalImagesRef.current.north;
+            if (northImg && northImg.complete && northImg.naturalWidth > 0) {
+              ctx.drawImage(northImg, targetX, targetY + stepBob, drawSize, drawSize);
             }
           }
         } else {
@@ -733,7 +603,7 @@ export function RadarCanvasOverlay({
           if (idleImg && idleImg.complete && idleImg.naturalWidth > 0) {
             ctx.drawImage(idleImg, targetX, targetY + idleBob, drawSize, drawSize);
           } else {
-            const defaultImg = walkImagesRef.current.south[0];
+            const defaultImg = walkImagesRef.current[0];
             if (defaultImg && defaultImg.complete && defaultImg.naturalWidth > 0) {
               ctx.drawImage(defaultImg, targetX, targetY + idleBob, drawSize, drawSize);
             }
@@ -777,19 +647,6 @@ export function RadarCanvasOverlay({
           ctx.fillRect(iceX + 9, iceY - 4, 4, 4);
           ctx.fillRect(iceX + 23, iceY - 5, 5, 5);
 
-          // Grietas de hielo interactivas (aumentan al tocar el bloque)
-          if (crackLevel >= 1) {
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(iceX + 8, iceY + 14, 10, 2);
-            ctx.fillRect(iceX + 16, iceY + 16, 2, 10);
-          }
-          if (crackLevel >= 2) {
-            ctx.fillStyle = "#e0f2fe";
-            ctx.fillRect(iceX + 18, iceY + 24, 12, 2);
-            ctx.fillRect(iceX + 12, iceY + 26, 8, 2);
-            ctx.fillRect(iceX + 22, iceY + 10, 2, 14);
-          }
-
           // Rótulo cómico pixel-art flotando sobre la cabeza del cazador
           ctx.fillStyle = "#0284c7";
           ctx.font = "900 12px monospace";
@@ -797,13 +654,6 @@ export function RadarCanvasOverlay({
           ctx.fillText("¡BRRR!", cx + shiverX + 22, cy - 20 + shiverY);
           ctx.fillStyle = "#ffffff";
           ctx.fillText("¡BRRR!", cx + shiverX + 21, cy - 21 + shiverY);
-
-          // Micro-prompt de interacción
-          ctx.fillStyle = "#082f49";
-          ctx.fillRect(cx - 32, iceY + iceH + 7, 64, 12);
-          ctx.fillStyle = "#bae6fd";
-          ctx.font = "900 8px monospace";
-          ctx.fillText(crackLevel > 0 ? "¡ROMPE HIELO!" : "TOCA X3", cx, iceY + iceH + 16);
 
           ctx.restore();
 

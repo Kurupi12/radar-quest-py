@@ -105,10 +105,8 @@ export function evaluateTacticalVectorAssistance(
     .filter((s) => !s.isAnomaly)
     .sort((a, b) => a.timestampMs - b.timestampMs);
 
-  // 1. PRIORITY OVERRIDE: Vehicle Mode (>= 20 km/h outside <30m; >= 35 km/h inside <30m capture jitter buffer)
-  const vehicleSpeedThresholdKmh =
-    currentDistanceMeters < 30 || thermalState === "QUEMANDO" ? 35 : 20;
-  const isDriving = inVehicleMode || currentSpeedKmh >= vehicleSpeedThresholdKmh;
+  // 1. PRIORITY OVERRIDE: Vehicle Mode (>= 20 km/h)
+  const isDriving = inVehicleMode || currentSpeedKmh >= 20;
   if (isDriving) {
     const baseDist =
       validSamples.length >= 2
@@ -146,9 +144,9 @@ export function evaluateTacticalVectorAssistance(
     return { tacticalHint: anomalyHint, snapshot };
   }
 
-  // 3. Filter walking-only samples within the kinematic window (15s - 30s)
+  // 3. Filter walking-only samples (< 20 km/h) within the kinematic window (15s - 30s)
   const walkingSamples = validSamples.filter(
-    (s) => !s.inVehicleMode && s.speedKmh < (s.distanceMeters < 30 ? 35 : 20)
+    (s) => !s.inVehicleMode && s.speedKmh < 20
   );
 
   let candidateTrend: TacticalTrend = "NEUTRAL";

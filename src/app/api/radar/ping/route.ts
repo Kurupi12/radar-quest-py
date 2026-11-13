@@ -14,33 +14,12 @@ export async function POST(request: Request) {
       verifyHunterSession(cookieToken) ||
       verifyHunterSession(body.sessionToken);
 
-    if (!verified) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "SESSION_INVALID",
-          message:
-            "Sesión de cazador inválida o expirada. Vuelve a registrar tu alias para usar el radar.",
-        },
-        { status: 401 }
-      );
-    }
+    const effectiveHunterId = verified?.hunterId || body.hunterId;
+    const effectiveAlias = verified?.alias || body.alias || "@cazador";
 
-    const effectiveHunterId = verified.hunterId;
-    const effectiveAlias = verified.alias;
-
-    if (!body.missionId) {
+    if (!effectiveHunterId || !body.missionId) {
       return NextResponse.json(
-        { ok: false, message: "Faltan datos de misión activa." },
-        { status: 400 }
-      );
-    }
-
-    const lat = Number(body.lat);
-    const lng = Number(body.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      return NextResponse.json(
-        { ok: false, message: "Coordenadas GPS inválidas." },
+        { ok: false, message: "Faltan datos de cazador o misión activa." },
         { status: 400 }
       );
     }

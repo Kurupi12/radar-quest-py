@@ -291,22 +291,10 @@ export interface DangerAlert {
   message: string | null;
 }
 
-export type ClimaxLevel = 1 | 2 | 3;
-
-export interface RouteBonusBeacon {
-  id: string;
-  label: string;
-  lat: number;
-  lng: number;
-  collected: boolean;
-}
-
 export interface RadarPingResponse {
   ok: boolean;
   thermalState: ThermalState;
   heatIntensity: number;
-  /** Non-leaking sub-progression inside <30m (1: 20-30m, 2: 10-20m, 3: <10m) */
-  climaxLevel?: ClimaxLevel | null;
   inVehicleMode: boolean;
   speedKmh: number;
   vehicleMessage: string | null;
@@ -320,9 +308,6 @@ export interface RadarPingResponse {
     requiredPings: number;
     ready: boolean;
   };
-  bonusNodes?: RouteBonusBeacon[];
-  newlyCollectedBonusNodeId?: string | null;
-  triangulationCooldownBoostMs?: number;
   /** True only when thermalState === 'QUEMANDO' (<30m) and walking (<20 km/h) */
   canOpenQrScanner: boolean;
   canClaimPresential: boolean;
@@ -330,74 +315,6 @@ export interface RadarPingResponse {
   missionStatus: MissionStatus;
   winnerAlias: string | null;
   serverTimestamp: string;
-}
-
-export interface TriangulateRequest {
-  missionId: string;
-  brandSlug?: string;
-  lat: number;
-  lng: number;
-  sessionToken?: string;
-}
-
-export interface TriangulationResponse {
-  ok: boolean;
-  sectorCode?: "N" | "NE" | "E" | "SE" | "S" | "SO" | "O" | "NO";
-  sectorLabel?: string;
-  centerBearingDeg?: number;
-  sweepArcDeg?: number;
-  cooldownRemainingSeconds?: number;
-  nextAvailableAtMs?: number;
-  expiresAtMs?: number;
-  message: string;
-}
-
-export interface HunterClaimSummary {
-  id: string;
-  missionId: string;
-  missionTitle: string;
-  city: string;
-  claimType: ClaimType;
-  claimMethod?: "QR_SCAN" | "PRESENTIAL_GPS";
-  couponCode: string;
-  prizeLabel: string;
-  whatsappRedeemUrl: string;
-  proofOfHuntPassed: boolean;
-  claimedAt: string;
-}
-
-export interface BrandLeaderboardEntry {
-  rank: number;
-  hunterId: string;
-  alias: string;
-  capturesCount: number;
-  majorPrizesCount: number;
-  fastestCaptureSeconds: number | null;
-  bestValidPings: number;
-  cities: string[];
-  score: number;
-  lastCaptureAt: string | null;
-}
-
-export interface HunterPersonalStats {
-  hunterId: string;
-  alias: string;
-  rank: number | null;
-  capturesCount: number;
-  majorPrizesCount: number;
-  fastestCaptureSeconds: number | null;
-  totalValidPings: number;
-  missionsTracked: number;
-  claims: HunterClaimSummary[];
-}
-
-export interface BrandLeaderboardResponse {
-  ok: boolean;
-  brandSlug: string;
-  cities: string[];
-  selectedCity: string | null;
-  leaderboard: BrandLeaderboardEntry[];
-  myStats: HunterPersonalStats | null;
 }
 
 export interface RadarClaimRequest {

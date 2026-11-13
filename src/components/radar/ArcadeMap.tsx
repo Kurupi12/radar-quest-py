@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Compass, LocateFixed, Moon, Sun } from "lucide-react";
+import { useEffect, useRef } from "react";
 import {
   Map as MapLibreMap,
   Marker,
@@ -9,10 +8,8 @@ import {
   type GeoJSONSource,
   type MapMouseEvent,
 } from "maplibre-gl";
-import type { RouteBonusBeacon } from "@/types/radar";
 import {
   registerAllRpgTextures,
-  setRpgTreesVisibility,
   syncRpgTreesOnMap,
 } from "@/lib/radar/mapTextures";
 
@@ -40,8 +37,6 @@ export interface MapHeatmapPoint {
   weight?: number;
 }
 
-export type ArcadeMapTheme = "rpg-16bit" | "cyberpunk-dark";
-
 interface ArcadeMapProps {
   centerLat: number;
   centerLng: number;
@@ -51,9 +46,6 @@ interface ArcadeMapProps {
   interactive?: boolean;
   /** Mode: 'player' (follows hunter), 'admin-pin' (click/drag secret treasure), 'admin-live' (Command Center) */
   mode?: "player" | "admin-pin" | "admin-live";
-  theme?: ArcadeMapTheme;
-  onThemeChange?: (nextTheme: ArcadeMapTheme) => void;
-  bonusBeacons?: RouteBonusBeacon[];
   secretPin?: { lat: number; lng: number } | null;
   liveHunters?: LiveHunterPin[];
   heatmapPoints?: MapHeatmapPoint[];
@@ -74,10 +66,6 @@ const TARGET_SVG_HTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" heig
 const CAR_SVG_HTML = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:3px;"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>`;
 
 const WALKER_SVG_HTML = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:3px;"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>`;
-
-const BEACON_SVG_HTML = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
-
-const BEACON_DONE_SVG_HTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;"><polyline points="20 6 9 17 4 12"/></svg>`;
 
 function buildHeatmapGeoJson(points: MapHeatmapPoint[]) {
   return {
@@ -222,9 +210,6 @@ export function ArcadeMap({
   secondaryColor = "#00f0ff",
   interactive = true,
   mode = "player",
-  theme,
-  onThemeChange,
-  bonusBeacons = [],
   secretPin = null,
   liveHunters = [],
   heatmapPoints = [],
@@ -232,23 +217,10 @@ export function ArcadeMap({
   onSelectCoord,
   onCanvasReady,
 }: ArcadeMapProps) {
-  const [internalTheme, setInternalTheme] = useState<ArcadeMapTheme>(CURRENT_MAP_THEME);
-  const activeTheme: ArcadeMapTheme = theme || internalTheme;
-  const activeThemeRef = useRef<ArcadeMapTheme>(activeTheme);
-  activeThemeRef.current = activeTheme;
-
-  const [isUserPanned, setIsUserPanned] = useState(false);
-  const isUserPannedRef = useRef(false);
-  const [compassEnabled, setCompassEnabled] = useState(false);
-
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const secretMarkerRef = useRef<Marker | null>(null);
   const hunterMarkersRef = useRef<Marker[]>([]);
-  const beaconMarkersRef = useRef<Marker[]>([]);
-  const applyThemeFnRef = useRef<((next: ArcadeMapTheme) => void) | null>(null);
-  const latestCoordsRef = useRef({ lat: centerLat, lng: centerLng });
-  latestCoordsRef.current = { lat: centerLat, lng: centerLng };
   const onSelectCoordRef = useRef(onSelectCoord);
   onSelectCoordRef.current = onSelectCoord;
 
@@ -293,16 +265,11 @@ export function ArcadeMap({
 
         if (layer.type === "background") {
           try {
-            mapInstance.setPaintProperty(layer.id, "background-pattern", undefined);
             mapInstance.setPaintProperty(layer.id, "background-color", "#080d1a");
           } catch {}
         }
 
         if (layer.type === "fill") {
-          try {
-            mapInstance.setPaintProperty(layer.id, "fill-pattern", undefined);
-            mapInstance.setPaintProperty(layer.id, "fill-translate", [0, 0]);
-          } catch {}
           if (id.includes("water")) {
             try {
               mapInstance.setPaintProperty(layer.id, "fill-color", "#0284c7");
@@ -649,26 +616,15 @@ export function ArcadeMap({
       }
     };
 
-    const applyThemeToMap = (targetTheme: ArcadeMapTheme) => {
-      if (!map.isStyleLoaded()) return;
-      if (targetTheme === "rpg-16bit") {
+    const applyArcade16BitPalette = () => {
+      if (CURRENT_MAP_THEME === "rpg-16bit") {
         applyRpg16BitTheme(map);
         try {
-          setRpgTreesVisibility(map, true);
           syncRpgTreesOnMap(map);
         } catch {}
       } else {
-        try {
-          setRpgTreesVisibility(map, false);
-        } catch {}
         applyCyberpunkDarkTheme(map);
       }
-    };
-
-    applyThemeFnRef.current = applyThemeToMap;
-
-    const applyArcade16BitPalette = () => {
-      applyThemeToMap(activeThemeRef.current);
 
       // 5. Mount HunterPing Heatmap Layer if enabled
       if (
@@ -692,20 +648,11 @@ export function ArcadeMap({
     map.on("style.load", applyArcade16BitPalette);
     map.on("load", applyArcade16BitPalette);
 
-    map.on("moveend", () => {
-      if (activeThemeRef.current === "rpg-16bit") {
+    if (CURRENT_MAP_THEME === "rpg-16bit") {
+      map.on("moveend", () => {
         try {
           syncRpgTreesOnMap(map);
         } catch {}
-      }
-    });
-
-    if (mode === "player") {
-      map.on("dragstart", (ev) => {
-        if (ev.originalEvent && !isUserPannedRef.current) {
-          isUserPannedRef.current = true;
-          setIsUserPanned(true);
-        }
       });
     }
 
@@ -723,55 +670,11 @@ export function ArcadeMap({
     return () => {
       secretMarkerRef.current?.remove();
       hunterMarkersRef.current.forEach((m) => m.remove());
-      beaconMarkersRef.current.forEach((m) => m.remove());
       map.remove();
       mapRef.current = null;
-      applyThemeFnRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Reactive Map Theme Switch (rpg-16bit <-> cyberpunk-dark)
-  useEffect(() => {
-    if (applyThemeFnRef.current) {
-      applyThemeFnRef.current(activeTheme);
-    }
-  }, [activeTheme]);
-
-  // Reactive Compass / DeviceOrientation Bearing Control (player mode)
-  useEffect(() => {
-    if (!compassEnabled || mode !== "player") return;
-    let active = true;
-
-    const handleOrientation = (ev: DeviceOrientationEvent) => {
-      if (!active || !mapRef.current) return;
-      const extEv = ev as DeviceOrientationEvent & {
-        webkitCompassHeading?: number;
-      };
-      let heading: number | null = null;
-      if (typeof extEv.webkitCompassHeading === "number") {
-        heading = extEv.webkitCompassHeading;
-      } else if (typeof ev.alpha === "number") {
-        heading = (360 - ev.alpha) % 360;
-      }
-      if (heading !== null && Number.isFinite(heading)) {
-        try {
-          mapRef.current.setBearing(heading);
-        } catch {}
-      }
-    };
-
-    window.addEventListener("deviceorientationabsolute", handleOrientation as EventListener);
-    window.addEventListener("deviceorientation", handleOrientation);
-    return () => {
-      active = false;
-      window.removeEventListener(
-        "deviceorientationabsolute",
-        handleOrientation as EventListener
-      );
-      window.removeEventListener("deviceorientation", handleOrientation);
-    };
-  }, [compassEnabled, mode]);
 
   // Reactive Heatmap Layer Sync
   useEffect(() => {
@@ -782,10 +685,10 @@ export function ArcadeMap({
     } catch {}
   }, [heatmapPoints, showHeatmap]);
 
-  // Smooth pan when centerLat / centerLng updates (paused while player manually explores map)
+  // Smooth pan when centerLat / centerLng updates
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || isUserPannedRef.current) return;
+    if (!map) return;
     const current = map.getCenter();
     const diff =
       Math.abs(current.lat - centerLat) + Math.abs(current.lng - centerLng);
@@ -796,49 +699,6 @@ export function ArcadeMap({
       });
     }
   }, [centerLat, centerLng]);
-
-  const handleRecenterPlayer = useCallback(() => {
-    isUserPannedRef.current = false;
-    setIsUserPanned(false);
-    const map = mapRef.current;
-    if (!map) return;
-    map.easeTo({
-      center: [latestCoordsRef.current.lng, latestCoordsRef.current.lat],
-      zoom: Math.max(map.getZoom(), 16.2),
-      duration: 500,
-    });
-  }, []);
-
-  const handleToggleCompass = useCallback(async () => {
-    if (compassEnabled) {
-      setCompassEnabled(false);
-      mapRef.current?.easeTo({ bearing: 0, duration: 350 });
-      return;
-    }
-
-    try {
-      const DeviceOrient = window.DeviceOrientationEvent as unknown as {
-        requestPermission?: () => Promise<"granted" | "denied">;
-      };
-      if (DeviceOrient && typeof DeviceOrient.requestPermission === "function") {
-        const res = await DeviceOrient.requestPermission();
-        if (res !== "granted") return;
-      }
-    } catch {
-      // Non-iOS or permission API absent
-    }
-    setCompassEnabled(true);
-  }, [compassEnabled]);
-
-  const handleSwitchTheme = useCallback(() => {
-    const next: ArcadeMapTheme =
-      activeTheme === "rpg-16bit" ? "cyberpunk-dark" : "rpg-16bit";
-    if (onThemeChange) {
-      onThemeChange(next);
-    } else {
-      setInternalTheme(next);
-    }
-  }, [activeTheme, onThemeChange]);
 
   // Admin Secret Pin Marker (Draggable in admin-pin, static in admin-live)
   useEffect(() => {
@@ -918,95 +778,10 @@ export function ArcadeMap({
     }
   }, [liveHunters, mode]);
 
-  // Public-Zone Deterministic Bonus Beacons (player mode)
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || mode !== "player") return;
-
-    beaconMarkersRef.current.forEach((m) => m.remove());
-    beaconMarkersRef.current = [];
-
-    for (const beacon of bonusBeacons) {
-      const el = document.createElement("div");
-      const accent = beacon.collected ? "#22c55e" : "#00f0ff";
-      const bg = beacon.collected ? "#052e16" : "#082f49";
-      el.className = "pointer-events-none select-none";
-      el.innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;">
-          <span style="background:${bg};border:2px solid ${accent};color:${accent};font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 0 10px ${accent}55;display:inline-flex;align-items:center;gap:3px;">
-            ${beacon.collected ? BEACON_DONE_SVG_HTML : BEACON_SVG_HTML}
-            <span>${beacon.collected ? "ACTIVADA" : beacon.label}</span>
-          </span>
-          <span style="width:10px;height:10px;background:${accent};border:2px solid #ffffff;transform:rotate(45deg);margin-top:2px;box-shadow:0 0 8px ${accent};"></span>
-        </div>
-      `;
-      const m = new Marker({ element: el })
-        .setLngLat([beacon.lng, beacon.lat])
-        .addTo(map);
-      beaconMarkersRef.current.push(m);
-    }
-  }, [bonusBeacons, mode]);
-
   return (
-    <div className="w-full h-full relative overflow-hidden bg-[#080d1a]">
-      <div
-        ref={containerRef}
-        className="arcade-map-wrapper w-full h-full relative"
-      />
-
-      {mode === "player" && interactive && (
-        <div className="absolute right-2.5 bottom-[222px] z-20 flex flex-col gap-1.5 pointer-events-auto">
-          <button
-            type="button"
-            onClick={handleRecenterPlayer}
-            title="Re-centrar cámara en mi ubicación"
-            aria-label="Re-centrar en mí"
-            className={`px-2 py-1.5 rf-btn-steel flex items-center gap-1 text-[10px] font-bold shadow-lg ${
-              isUserPanned
-                ? "border-cyan-300 text-cyan-200 animate-pulse"
-                : "text-slate-200 opacity-85"
-            }`}
-          >
-            <LocateFixed className="w-3.5 h-3.5 text-cyan-300" />
-            {isUserPanned && <span>CENTRAR</span>}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleToggleCompass}
-            title="Rotar mapa con brújula del dispositivo"
-            aria-label="Activar brújula del mapa"
-            className={`p-2 rf-btn-steel flex items-center justify-center shadow-lg ${
-              compassEnabled
-                ? "border-amber-400 text-amber-300"
-                : "text-slate-300 opacity-85"
-            }`}
-          >
-            <Compass
-              className={`w-3.5 h-3.5 ${compassEnabled ? "animate-spin" : ""}`}
-              style={compassEnabled ? { animationDuration: "6s" } : undefined}
-            />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSwitchTheme}
-            title={
-              activeTheme === "rpg-16bit"
-                ? "Cambiar a Modo Nocturno"
-                : "Cambiar a Modo Día RPG 16-Bit"
-            }
-            aria-label="Cambiar tema visual del mapa"
-            className="p-2 rf-btn-steel text-amber-200 flex items-center justify-center shadow-lg opacity-90"
-          >
-            {activeTheme === "rpg-16bit" ? (
-              <Moon className="w-3.5 h-3.5 text-indigo-300" />
-            ) : (
-              <Sun className="w-3.5 h-3.5 text-amber-300" />
-            )}
-          </button>
-        </div>
-      )}
-    </div>
+    <div
+      ref={containerRef}
+      className="arcade-map-wrapper w-full h-full relative overflow-hidden bg-[#080d1a]"
+    />
   );
 }
