@@ -241,3 +241,39 @@ export function getCardinalDirection4(bearingDeg: number): CardinalDirection4 {
   return "north";
 }
 
+export interface GpsCoordsSample {
+  lat: number;
+  lng: number;
+  accuracy: number;
+}
+
+/**
+ * Requests a fresh high-accuracy browser GPS reading (maximumAge: 0) before validating captures.
+ * Falls back to `fallbackCoords` only if geolocation is unavailable, times out, or errors.
+ */
+export async function getFreshGpsCoords(
+  fallbackCoords: GpsCoordsSample | null,
+  timeoutMs = 5500
+): Promise<GpsCoordsSample | null> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    return fallbackCoords;
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        resolve({
+          lat: Number(pos.coords.latitude.toFixed(6)),
+          lng: Number(pos.coords.longitude.toFixed(6)),
+          accuracy: Math.round(pos.coords.accuracy || 10),
+        }),
+      () => resolve(fallbackCoords),
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: timeoutMs,
+      }
+    );
+  });
+}
+

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { Brand, Hunter, PublicBrand, RadarClaimResponse } from "@/types/radar";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
+import { getFreshGpsCoords } from "@/lib/radar/geo";
 
 // Web API type declaration for BarcodeDetector
 interface DetectedBarcode {
@@ -35,6 +36,7 @@ interface ArcadeQrScannerModalProps {
   hunter: Hunter;
   sessionToken: string;
   currentCoords: { lat: number; lng: number; accuracy: number };
+  gpsMode?: "real" | "simulator";
   demoTokenHint?: string;
   onClose: () => void;
   onClaimSuccess?: (res: RadarClaimResponse) => void;
@@ -156,6 +158,7 @@ export function ArcadeQrScannerModal({
   hunter,
   sessionToken,
   currentCoords,
+  gpsMode = "real",
   demoTokenHint = "",
   onClose,
   onClaimSuccess,
@@ -193,15 +196,20 @@ export function ArcadeQrScannerModal({
       arcadeHardware.vibrate([60, 30, 90]);
 
       try {
+        const activeCoords =
+          gpsMode === "simulator"
+            ? currentCoords
+            : (await getFreshGpsCoords(currentCoords, 3500)) || currentCoords;
+
         const res = await fetch("/api/radar/claim", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             tokenOrNodeCode: cleanToken,
             brandSlug: brand.slug,
-            lat: currentCoords.lat,
-            lng: currentCoords.lng,
-            accuracy: currentCoords.accuracy,
+            lat: activeCoords.lat,
+            lng: activeCoords.lng,
+            accuracy: activeCoords.accuracy,
             hunterId: hunter.id,
             alias: hunter.alias,
             sessionToken,
@@ -236,9 +244,8 @@ export function ArcadeQrScannerModal({
     },
     [
       brand.slug,
-      currentCoords.accuracy,
-      currentCoords.lat,
-      currentCoords.lng,
+      currentCoords,
+      gpsMode,
       hunter.alias,
       hunter.id,
       onClaimSuccess,

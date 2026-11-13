@@ -48,6 +48,7 @@ import { ViralRecorder } from "@/components/radar/ViralRecorder";
 import { RadarPreloader } from "@/components/radar/RadarPreloader";
 import { BrandIconSvg } from "@/components/icons/BrandIconSvg";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
+import { getFreshGpsCoords } from "@/lib/radar/geo";
 import { VEHICLE_OVERRIDE_MESSAGE } from "@/lib/radar/tacticalVectorAssistance";
 
 interface RadarGameClientProps {
@@ -160,14 +161,17 @@ interface TacticalVectorReadoutProps {
   tacticalHint?: TacticalHint | null;
   inVehicleMode: boolean;
   speedKmh: number;
+  thermalState?: string;
 }
 
 const TacticalVectorReadout = memo(function TacticalVectorReadout({
   tacticalHint,
   inVehicleMode,
   speedKmh,
+  thermalState,
 }: TacticalVectorReadoutProps) {
-  const isVehicle = inVehicleMode || speedKmh >= 20;
+  const isVehicle =
+    inVehicleMode || speedKmh >= (thermalState === "QUEMANDO" ? 35 : 20);
   const targetMessage = isVehicle
     ? VEHICLE_OVERRIDE_MESSAGE
     : tacticalHint?.message ||
@@ -303,7 +307,9 @@ export function RadarGameClient({
   });
 
   const [gpsMode, setGpsMode] = useState<"real" | "simulator">("real");
+  const [hasLiveGpsFix, setHasLiveGpsFix] = useState(false);
   const [showSimBar, setShowSimBar] = useState(false);
+  const [simError, setSimError] = useState<string | null>(null);
   const [demoQrHint, setDemoQrHint] = useState<string>(
     autoOpenClaimToken || ""
   );
@@ -358,11 +364,13 @@ export function RadarGameClient({
 
     const restore = async () => {
       try {
+        let hasCachedToken = false;
         const cached = localStorage.getItem("rq_hunter_profile");
         if (cached) {
           const parsed = JSON.parse(cached);
           if (parsed?.hunter?.id) {
             if (!brand.requireAdult18 || parsed.hunter.isAdult18) {
+              hasCachedToken = Boolean(parsed.sessionToken);
               setHunter(parsed.hunter);
               setSessionToken(parsed.sessionToken || "");
             }
@@ -375,6 +383,10 @@ export function RadarGameClient({
           if (!brand.requireAdult18 || data.hunter.isAdult18) {
             setHunter(data.hunter);
           }
+        } else if (!cancelled && data?.authenticated === false && !hasCachedToken) {
+          localStorage.removeItem("rq_hunter_profile");
+          setHunter(null);
+          setSessionToken("");
         }
       } catch {
         // Ignore offline check
@@ -531,6 +543,16 @@ export function RadarGameClient({
           }),
         });
 
+        if (res.status === 401) {
+          try {
+            localStorage.removeItem("rq_hunter_profile");
+          } catch {}
+          setHunter(null);
+          setSessionToken("");
+          setPingData(null);
+          return;
+        }
+
         const data = (await res.json()) as RadarPingResponse;
         if (data.ok) {
           if (data.tacticalStateSnapshot) {
@@ -587,6 +609,7 @@ export function RadarGameClient({
             })
           );
         } catch {}
+        setHasLiveGpsFix(true);
         setCoords(next);
       },
       () => {},
@@ -618,7 +641,7 @@ export function RadarGameClient({
       | "TELEPORT"
   ) => {
     if (!selectedMission) return;
-    setGpsMode("simulator");
+    setSimError(null);
 
     try {
       const res = await fetch("/api/radar/demo-step", {
@@ -630,7 +653,8 @@ export function RadarGameClient({
         }),
       });
       const step = await res.json();
-      if (step.ok) {
+      if (res.ok && step.ok) {
+        setGpsMode("simulator");
         const nextCoords = {
           lat: step.lat,
           lng: step.lng,
@@ -639,8 +663,12 @@ export function RadarGameClient({
         setCoords(nextCoords);
         if (step.demoQrCode) setDemoQrHint(step.demoQrCode);
         await sendRadarPing(nextCoords);
+      } else {
+        setSimError(step?.message || "Simulador no disponible.");
       }
-    } catch {}
+    } catch {
+      setSimError("No se pudo conectar con el simulador.");
+    }
   };
 
   const toggleAudio = () => {
@@ -700,23 +728,13 @@ export function RadarGameClient({
 
     try {
       let activeCoords = coords;
-      if (
-        gpsMode === "real" &&
-        typeof navigator !== "undefined" &&
-        navigator.geolocation
-      ) {
-        activeCoords = await new Promise((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            (pos) =>
-              resolve({
-                lat: Number(pos.coords.latitude.toFixed(6)),
-                lng: Number(pos.coords.longitude.toFixed(6)),
-                accuracy: Math.round(pos.coords.accuracy || 10),
-              }),
-            () => resolve(coords),
-            { enableHighAccuracy: true, timeout: 5000 }
-          );
-        });
+      if (gpsMode === "real") {
+        const fresh = await getFreshGpsCoords(null, 5000);
+        if (fresh) {
+          activeCoords = fresh;
+          setHasLiveGpsFix(true);
+          setCoords(fresh);
+        }
       }
 
       const res = await fetch("/api/radar/claim", {
@@ -998,6 +1016,7 @@ export function RadarGameClient({
                   tacticalHint={pingData?.tacticalHint}
                   inVehicleMode={Boolean(pingData?.inVehicleMode)}
                   speedKmh={pingData?.speedKmh ?? 0}
+                  thermalState={currentThermal}
                 />
               </div>
             )}
@@ -1069,6 +1088,11 @@ export function RadarGameClient({
                     <span>Teleport</span>
                   </button>
                 </div>
+                {simError && (
+                  <p className="mt-1.5 text-[10px] text-rose-300 font-bold leading-tight">
+                    {simError}
+                  </p>
+                )}
               </div>
             )}
 
@@ -1287,6 +1311,7 @@ export function RadarGameClient({
               hunter={hunter}
               sessionToken={sessionToken}
               currentCoords={coords}
+              gpsMode={gpsMode}
               demoTokenHint={demoQrHint}
               onClose={() => setShowInAppScanner(false)}
               onClaimSuccess={(res) => {
@@ -1314,6 +1339,8 @@ export function RadarGameClient({
               hunter={hunter}
               sessionToken={sessionToken}
               currentCoords={coords}
+              gpsMode={gpsMode}
+              hasLiveGpsFix={hasLiveGpsFix}
               initialResult={presentialClaimResult}
               onClose={() => setShowPresentialModal(false)}
             />
@@ -1326,6 +1353,8 @@ export function RadarGameClient({
               hunter={hunter}
               sessionToken={sessionToken}
               currentCoords={coords}
+              gpsMode={gpsMode}
+              hasLiveGpsFix={hasLiveGpsFix}
               suggestedCode={demoQrHint}
               onClose={() => setShowExternalClaimModal(false)}
             />

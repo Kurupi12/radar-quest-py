@@ -43,7 +43,8 @@ const TACTICAL_KINEMATIC_WINDOW_MS = 30_000;
 function computeThermalBracket(
   distanceMeters: number,
   zoneRadiusMeters: number,
-  inVehicleMode: boolean
+  inVehicleMode: boolean,
+  speedKmh = 0
 ): { thermalState: ThermalState; heatIntensity: number } {
   if (distanceMeters > zoneRadiusMeters) {
     return { thermalState: "FUERA DE ZONA", heatIntensity: 6 };
@@ -58,8 +59,8 @@ function computeThermalBracket(
     return { thermalState: "CALIENTE", heatIntensity: 78 };
   }
 
-  // Player is < 30m from treasure
-  if (inVehicleMode) {
+  // Player is < 30m from treasure: allow pedestrian GPS jitter up to 35 km/h
+  if (inVehicleMode && speedKmh >= 35) {
     return { thermalState: "CALIENTE", heatIntensity: 76 };
   }
 
@@ -173,6 +174,8 @@ export async function processRadarPing(
       const computedSpeed = jumpMeters / 1000 / deltaHours;
       speedKmh = jumpMeters < 18 ? Math.min(computedSpeed, 6) : computedSpeed;
 
+      const vehicleSpeedThresholdKmh = distanceToSecret < 30 ? 35 : 20;
+
       if (
         (jumpMeters > 500 && deltaMs <= 45_000) ||
         (jumpMeters >= 25 && speedKmh > 130)
@@ -180,7 +183,7 @@ export async function processRadarPing(
         isTeleportAnomaly = true;
         anomalyMessage =
           "TELEPORT_ANOMALY: Salto GPS imposible detectado (>130 km/h o >500m). Desactivá ubicaciones falsas para rastrear.";
-      } else if (speedKmh >= 20 && speedKmh <= 130) {
+      } else if (speedKmh >= vehicleSpeedThresholdKmh && speedKmh <= 130) {
         inVehicleMode = true;
         vehicleMessage = `MODO VEHÍCULO (${Math.round(
           speedKmh
@@ -194,7 +197,8 @@ export async function processRadarPing(
     : computeThermalBracket(
         distanceToSecret,
         mission.zoneRadiusMeters,
-        inVehicleMode
+        inVehicleMode,
+        speedKmh
       );
 
   const isInsideZone = distanceToSecret <= mission.zoneRadiusMeters;
