@@ -11,6 +11,10 @@ import {
   findHunterById,
   upsertHunterAndLead,
 } from "@/lib/db/store";
+import {
+  sanitizePublicAlias,
+  validateRegistrationAlias,
+} from "@/lib/radar/aliasPrivacy";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -22,12 +26,15 @@ export async function GET() {
   }
 
   const hunter = await findHunterById(session.hunterId);
+  const safeHunter = hunter
+    ? { ...hunter, alias: sanitizePublicAlias(hunter.alias) }
+    : null;
 
   return NextResponse.json({
     ok: true,
     authenticated: true,
     session,
-    hunter: hunter || null,
+    hunter: safeHunter,
   });
 }
 
@@ -42,11 +49,12 @@ export async function POST(request: Request) {
       ? String(body.sourceMissionId)
       : null;
 
-    if (rawAlias.length < 2) {
+    const aliasCheck = validateRegistrationAlias(rawAlias);
+    if (!aliasCheck.ok) {
       return NextResponse.json(
         {
           ok: false,
-          message: "Ingresá tu Alias o @Instagram (mínimo 2 caracteres).",
+          message: aliasCheck.message,
         },
         { status: 400 }
       );
@@ -82,7 +90,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const cleanAlias = rawAlias.startsWith("@") ? rawAlias : `@${rawAlias}`;
+    const cleanAlias = aliasCheck.alias;
     const hunter = await upsertHunterAndLead({
       alias: cleanAlias,
       whatsapp,

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { sanitizePublicAlias } from "@/lib/radar/aliasPrivacy";
 import type { HunterSessionPayload } from "@/types/radar";
 
 export const HUNTER_SESSION_COOKIE = "rq_hunter_session";
@@ -11,9 +12,14 @@ const HMAC_SECRET =
  * Signs a hunter session payload using HMAC-SHA256 (Base64URL encoded).
  */
 export function signHunterSession(payload: HunterSessionPayload): string {
-  const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString(
-    "base64url"
-  );
+  const safePayload: HunterSessionPayload = {
+    ...payload,
+    alias: sanitizePublicAlias(payload.alias),
+  };
+  const encodedPayload = Buffer.from(
+    JSON.stringify(safePayload),
+    "utf8"
+  ).toString("base64url");
   const signature = crypto
     .createHmac("sha256", HMAC_SECRET)
     .update(encodedPayload)
@@ -49,6 +55,7 @@ export function verifyHunterSession(
       Buffer.from(encodedPayload, "base64url").toString("utf8")
     ) as HunterSessionPayload;
     if (!parsed.hunterId || !parsed.whatsapp) return null;
+    parsed.alias = sanitizePublicAlias(parsed.alias);
     return parsed;
   } catch {
     return null;

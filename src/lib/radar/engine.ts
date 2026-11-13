@@ -29,6 +29,7 @@ import {
   isCloudDbEnabled,
   toPrismaThermal,
 } from "@/lib/db/prisma";
+import { sanitizePublicAlias } from "@/lib/radar/aliasPrivacy";
 import {
   calculateBearingDegrees,
   calculateEffectiveCaptureRadius,
@@ -153,6 +154,7 @@ export async function processRadarPing(
 ): Promise<RadarPingResponse> {
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
+  const safeInputAlias = sanitizePublicAlias(input.alias);
 
   if (!isValidLatLng(input.lat, input.lng)) {
     throw new Error("Coordenadas GPS inválidas.");
@@ -162,6 +164,10 @@ export async function processRadarPing(
   if (!mission) {
     throw new Error("Misión no encontrada.");
   }
+
+  const safeMissionWinnerAlias = mission.winnerAlias
+    ? sanitizePublicAlias(mission.winnerAlias)
+    : null;
 
   if (mission.status === "PAUSED" || mission.status === "DRAFT") {
     return {
@@ -200,7 +206,7 @@ export async function processRadarPing(
       canClaimPresential: false,
       validationMode: mission.validationMode || "HYBRID",
       missionStatus: mission.status,
-      winnerAlias: mission.winnerAlias,
+      winnerAlias: safeMissionWinnerAlias,
       serverTimestamp: nowIso,
     };
   }
@@ -420,10 +426,10 @@ export async function processRadarPing(
       // Ensure hunter FK exists in cloud DB
       await prisma.hunter.upsert({
         where: { id: input.hunterId },
-        update: { alias: input.alias || "@cazador" },
+        update: { alias: safeInputAlias },
         create: {
           id: input.hunterId,
-          alias: input.alias || "@cazador",
+          alias: safeInputAlias,
           whatsapp: `+595000${input.hunterId.replace(/[^0-9a-z]/gi, "").slice(0, 7)}`,
           isAdult18: true,
         },
@@ -435,7 +441,7 @@ export async function processRadarPing(
             data: {
               missionId: mission.id,
               hunterId: input.hunterId,
-              alias: input.alias || "@cazador",
+              alias: safeInputAlias,
               lat: input.lat,
               lng: input.lng,
               accuracy: safeAcc,
@@ -454,7 +460,7 @@ export async function processRadarPing(
               },
             },
             update: {
-              alias: input.alias || "@cazador",
+              alias: safeInputAlias,
               lastLat: input.lat,
               lastLng: input.lng,
               lastAccuracy: safeAcc,
@@ -473,7 +479,7 @@ export async function processRadarPing(
             create: {
               missionId: mission.id,
               hunterId: input.hunterId,
-              alias: input.alias || "@cazador",
+              alias: safeInputAlias,
               lastLat: input.lat,
               lastLng: input.lng,
               lastAccuracy: safeAcc,
@@ -568,7 +574,7 @@ export async function processRadarPing(
       id: `png_${crypto.randomUUID().slice(0, 10)}`,
       missionId: mission.id,
       hunterId: input.hunterId,
-      alias: input.alias || "@cazador",
+      alias: safeInputAlias,
       lat: input.lat,
       lng: input.lng,
       accuracy: safeAcc,
@@ -591,7 +597,7 @@ export async function processRadarPing(
         id: `tel_${crypto.randomUUID().slice(0, 10)}`,
         missionId: mission.id,
         hunterId: input.hunterId,
-        alias: input.alias || "@cazador",
+        alias: safeInputAlias,
         lastLat: input.lat,
         lastLng: input.lng,
         lastAccuracy: safeAcc,
@@ -607,7 +613,7 @@ export async function processRadarPing(
       };
       db.telemetry.push(telemetry);
     } else {
-      telemetry.alias = input.alias || telemetry.alias;
+      telemetry.alias = safeInputAlias;
       telemetry.lastLat = input.lat;
       telemetry.lastLng = input.lng;
       telemetry.lastAccuracy = safeAcc;
@@ -766,7 +772,7 @@ export async function processRadarPing(
     canClaimPresential,
     validationMode,
     missionStatus: mission.status,
-    winnerAlias: mission.winnerAlias,
+    winnerAlias: safeMissionWinnerAlias,
     serverTimestamp: nowIso,
   };
 }
@@ -987,6 +993,8 @@ export async function processRadarClaim(
     };
   }
 
+  const safeHunterAlias = sanitizePublicAlias(hunter.alias);
+
   if (brand.requireAdult18 && !hunter.isAdult18) {
     return {
       ok: false,
@@ -1092,7 +1100,7 @@ export async function processRadarClaim(
           data: {
             status: "CAPTURED",
             winnerHunterId: hunter.id,
-            winnerAlias: hunter.alias,
+            winnerAlias: safeHunterAlias,
             winnerClaimCode: tryCoupon,
             capturedAt: new Date(),
           },
@@ -1114,7 +1122,9 @@ export async function processRadarClaim(
           couponCode = `${prefix}-LATE-${randomSuffix}`;
           prizeLabel = `${mission.consolationTitle} (Explorador Curioso)`;
           userMessage = `¡Casi! El Premio Mayor ya fue capturado por ${
-            freshMsn?.winnerAlias || "otro cazador"
+            freshMsn?.winnerAlias
+              ? sanitizePublicAlias(freshMsn.winnerAlias)
+              : "otro cazador"
           }, pero por llegar hasta el punto ganaste un Cupón de Consuelo oficial.`;
         }
       } else {
@@ -1133,7 +1143,9 @@ export async function processRadarClaim(
           couponCode = `${prefix}-LATE-${randomSuffix}`;
           prizeLabel = `${mission.consolationTitle} (Explorador Curioso)`;
           userMessage = `El Premio Mayor ya fue capturado por ${
-            freshMsn?.winnerAlias || "otro cazador"
+            freshMsn?.winnerAlias
+              ? sanitizePublicAlias(freshMsn.winnerAlias)
+              : "otro cazador"
           }, pero ganaste un Cupón de Consuelo oficial.`;
         }
       }
@@ -1145,11 +1157,11 @@ export async function processRadarClaim(
             whatsapp: hunter.whatsapp,
           },
         },
-        update: { alias: hunter.alias },
+        update: { alias: safeHunterAlias },
         create: {
           brandId: brand.id,
           hunterId: hunter.id,
-          alias: hunter.alias,
+          alias: safeHunterAlias,
           whatsapp: hunter.whatsapp,
           isAdult18: hunter.isAdult18,
           sourceMissionId: mission.id,
@@ -1160,7 +1172,7 @@ export async function processRadarClaim(
       const whatsappRedeemUrl = buildWhatsappRedeemUrl(
         brand,
         mission,
-        hunter.alias,
+        safeHunterAlias,
         couponCode,
         claimType,
         prizeLabel,
@@ -1172,7 +1184,7 @@ export async function processRadarClaim(
           missionId: mission.id,
           brandId: brand.id,
           hunterId: hunter.id,
-          alias: hunter.alias,
+          alias: safeHunterAlias,
           whatsapp: hunter.whatsapp,
           claimType,
           couponCode,
@@ -1251,7 +1263,7 @@ export async function processRadarClaim(
 
     dbMission.status = "CAPTURED";
     dbMission.winnerHunterId = hunter.id;
-    dbMission.winnerAlias = hunter.alias;
+    dbMission.winnerAlias = safeHunterAlias;
     dbMission.winnerClaimCode = couponCode;
     dbMission.capturedAt = new Date().toISOString();
     dbMission.updatedAt = dbMission.capturedAt;
@@ -1265,7 +1277,9 @@ export async function processRadarClaim(
     couponCode = `${prefix}-LATE-${randomSuffix}`;
     prizeLabel = `${dbMission.consolationTitle} (Explorador Curioso)`;
     userMessage = `¡Casi! El Premio Mayor ya fue capturado por ${
-      dbMission.winnerAlias || "otro cazador"
+      dbMission.winnerAlias
+        ? sanitizePublicAlias(dbMission.winnerAlias)
+        : "otro cazador"
     }, pero por llegar hasta el punto ganaste un Cupón de Consuelo oficial.`;
   }
 
@@ -1277,7 +1291,7 @@ export async function processRadarClaim(
       id: `lead_${crypto.randomUUID().slice(0, 10)}`,
       brandId: brand.id,
       hunterId: hunter.id,
-      alias: hunter.alias,
+      alias: safeHunterAlias,
       whatsapp: hunter.whatsapp,
       isAdult18: hunter.isAdult18,
       sourceMissionId: dbMission.id,
@@ -1289,7 +1303,7 @@ export async function processRadarClaim(
   const whatsappRedeemUrl = buildWhatsappRedeemUrl(
     brand,
     dbMission,
-    hunter.alias,
+    safeHunterAlias,
     couponCode,
     claimType,
     prizeLabel,
@@ -1301,7 +1315,7 @@ export async function processRadarClaim(
     missionId: dbMission.id,
     brandId: brand.id,
     hunterId: hunter.id,
-    alias: hunter.alias,
+    alias: safeHunterAlias,
     whatsapp: hunter.whatsapp,
     claimType,
     claimMethod: input.claimMethod || "QR_SCAN",

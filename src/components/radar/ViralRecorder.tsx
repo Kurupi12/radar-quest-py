@@ -5,6 +5,7 @@ import { Download, Film, Share2, Sparkles, X } from "lucide-react";
 import fixWebmDuration from "fix-webm-duration";
 import type { Brand, PublicBrand, PublicMission, ThermalState } from "@/types/radar";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
+import { sanitizePublicAlias } from "@/lib/radar/aliasPrivacy";
 
 interface ViralRecorderProps {
   brand: Brand | PublicBrand;
@@ -309,7 +310,11 @@ export function ViralRecorder({
     const nowStr = new Date().toLocaleString("es-PY", { hour12: false });
     ctx.fillStyle = "#94a3b8";
     ctx.font = "700 12px monospace";
-    ctx.fillText(`${nowStr} | CAZADOR: ${alias.toUpperCase()}`, topPanelX + 24, topPanelY + 64);
+    ctx.fillText(
+      `${nowStr} | CAZADOR: ${sanitizePublicAlias(alias).toUpperCase()}`,
+      topPanelX + 24,
+      topPanelY + 64
+    );
 
     // 7. Thermal Status Cockpit Plaque (Identical to live game HUD)
     const thermalPlatX = 36;

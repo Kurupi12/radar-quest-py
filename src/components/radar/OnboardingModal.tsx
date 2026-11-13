@@ -5,6 +5,7 @@ import { AtSign, ShieldCheck, Smartphone, Zap } from "lucide-react";
 import type { Brand, Hunter, PublicBrand } from "@/types/radar";
 import { BrandIconSvg } from "@/components/icons/BrandIconSvg";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
+import { validateRegistrationAlias } from "@/lib/radar/aliasPrivacy";
 
 interface OnboardingModalProps {
   brand: Brand | PublicBrand;
@@ -26,6 +27,13 @@ export function OnboardingModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const aliasCheck = validateRegistrationAlias(alias);
+    if (!aliasCheck.ok) {
+      setError(aliasCheck.message);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -33,7 +41,7 @@ export function OnboardingModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          alias,
+          alias: aliasCheck.alias,
           whatsapp,
           isAdult18: brand.requireAdult18 ? isAdult18 : true,
           brandSlug: brand.slug,
@@ -107,10 +115,10 @@ export function OnboardingModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
-          {/* RETROFUTURISTIC TEXT BOX 1: ALIAS (Inspired by "ENTER LAND #") */}
+          {/* RETROFUTURISTIC TEXT BOX 1: NOMBRE / NICK */}
           <div>
             <label className="block text-[10px] uppercase font-bold text-amber-300 tracking-wider mb-1">
-              Alias o @Instagram
+              Nombre o Nick (sin correo)
             </label>
             <div className="rf-input-slot">
               <div className="px-2.5 py-2 border-r border-slate-700 bg-slate-900/80 text-amber-400 flex items-center justify-center">
@@ -118,11 +126,14 @@ export function OnboardingModal({
               </div>
               <input
                 type="text"
+                name="hunter_nick"
+                autoComplete="nickname"
+                spellCheck={false}
                 required
-                placeholder="@tu_usuario"
+                placeholder="ej: @tu_nick o Tu Nombre"
                 value={alias}
                 onChange={(e) => setAlias(e.target.value)}
-                className="w-full px-2.5 py-2 bg-transparent text-white font-mono text-xs uppercase tracking-wide focus:outline-none"
+                className="w-full px-2.5 py-2 bg-transparent text-white font-mono text-xs tracking-wide focus:outline-none"
               />
             </div>
           </div>

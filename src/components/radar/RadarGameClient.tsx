@@ -76,6 +76,7 @@ import { ViralRecorder } from "@/components/radar/ViralRecorder";
 import { RadarPreloader } from "@/components/radar/RadarPreloader";
 import { BrandIconSvg } from "@/components/icons/BrandIconSvg";
 import { arcadeHardware } from "@/lib/hardware/arcadeHardware";
+import { sanitizePublicAlias } from "@/lib/radar/aliasPrivacy";
 import {
   calculateHaversineMeters,
   formatMacroZoneDistance,
@@ -354,7 +355,14 @@ export function RadarGameClient({
         const cached = localStorage.getItem("rq_last_known_coords");
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (typeof parsed?.lat === "number" && typeof parsed?.lng === "number") {
+          const isRecent =
+            typeof parsed?.savedAt === "number" &&
+            Date.now() - parsed.savedAt < 30 * 60 * 1000;
+          if (
+            isRecent &&
+            typeof parsed?.lat === "number" &&
+            typeof parsed?.lng === "number"
+          ) {
             return {
               lat: parsed.lat,
               lng: parsed.lng,
@@ -461,6 +469,14 @@ export function RadarGameClient({
   const autoSelectedByGpsRef = useRef(false);
   const coordsRef = useRef(coords);
   coordsRef.current = coords;
+  const gpsModeRef = useRef<"real" | "simulator">(gpsMode);
+  gpsModeRef.current = gpsMode;
+  const hasLiveGpsFixRef = useRef(hasLiveGpsFix);
+  hasLiveGpsFixRef.current = hasLiveGpsFix;
+  const coordsOriginRef = useRef<"fallback" | "cached" | "live" | "simulator">(
+    coordsOrigin
+  );
+  coordsOriginRef.current = coordsOrigin;
   const pingDataRef = useRef<RadarPingResponse | null>(pingData);
   pingDataRef.current = pingData;
   const lastPingSentAtRef = useRef(0);
@@ -595,6 +611,11 @@ export function RadarGameClient({
     ) {
       return;
     }
+    if (gpsModeRef.current === "real" && !hasLiveGpsFixRef.current) {
+      setTriangulateToastMsg("Calibrando señal GPS real antes de triangular.");
+      window.setTimeout(() => setTriangulateToastMsg(null), 3000);
+      return;
+    }
     setTriangulating(true);
     setTriangulateToastMsg(null);
     setPulseRecenterTrigger((n) => n + 1);
@@ -647,13 +668,16 @@ export function RadarGameClient({
       const cached = localStorage.getItem("rq_last_known_coords");
       if (!cached) return;
       const parsed = JSON.parse(cached);
-      if (typeof parsed?.lat === "number" && typeof parsed?.lng === "number") {
+      const isRecent =
+        typeof parsed?.savedAt === "number" &&
+        Date.now() - parsed.savedAt < 30 * 60 * 1000;
+      if (
+        isRecent &&
+        typeof parsed?.lat === "number" &&
+        typeof parsed?.lng === "number"
+      ) {
         setCoordsOrigin((prev) => (prev === "fallback" ? "cached" : prev));
-        const isRecent =
-          typeof parsed?.savedAt === "number" &&
-          Date.now() - parsed.savedAt < 30 * 60 * 1000;
         if (
-          isRecent &&
           !initialMissionId &&
           !autoOpenClaimToken &&
           !userPickedMissionRef.current &&
@@ -737,9 +761,21 @@ export function RadarGameClient({
         if (cached) {
           const parsed = JSON.parse(cached);
           if (parsed?.hunter?.id) {
-            if (!brand.requireAdult18 || parsed.hunter.isAdult18) {
+            const safeCachedHunter = {
+              ...parsed.hunter,
+              alias: sanitizePublicAlias(parsed.hunter.alias),
+            };
+            if (safeCachedHunter.alias !== parsed.hunter.alias) {
+              try {
+                localStorage.setItem(
+                  "rq_hunter_profile",
+                  JSON.stringify({ ...parsed, hunter: safeCachedHunter })
+                );
+              } catch {}
+            }
+            if (!brand.requireAdult18 || safeCachedHunter.isAdult18) {
               hasCachedToken = Boolean(parsed.sessionToken);
-              setHunter(parsed.hunter);
+              setHunter(safeCachedHunter);
               setSessionToken(parsed.sessionToken || "");
             }
           }
@@ -748,8 +784,12 @@ export function RadarGameClient({
         const res = await fetch("/api/auth/onboard");
         const data = await res.json();
         if (!cancelled && data?.authenticated && data?.hunter) {
-          if (!brand.requireAdult18 || data.hunter.isAdult18) {
-            setHunter(data.hunter);
+          const safeServerHunter = {
+            ...data.hunter,
+            alias: sanitizePublicAlias(data.hunter.alias),
+          };
+          if (!brand.requireAdult18 || safeServerHunter.isAdult18) {
+            setHunter(safeServerHunter);
           }
         } else if (!cancelled && data?.authenticated === false && !hasCachedToken) {
           localStorage.removeItem("rq_hunter_profile");
@@ -901,6 +941,10 @@ export function RadarGameClient({
       ) {
         return;
       }
+      // Nunca enviar pings con coordenadas en caché o de respaldo en modo real antes del primer fix GPS vivo
+      if (gpsModeRef.current === "real" && !hasLiveGpsFixRef.current) {
+        return;
+      }
 
       try {
         const res = await fetch("/api/radar/ping", {
@@ -913,7 +957,7 @@ export function RadarGameClient({
             lng: targetCoords.lng,
             accuracy: targetCoords.accuracy,
             hunterId: hunter.id,
-            alias: hunter.alias,
+            alias: sanitizePublicAlias(hunter.alias),
             sessionToken,
             prevTacticalState: tacticalSnapshotRef.current,
           }),
@@ -939,6 +983,7 @@ export function RadarGameClient({
           if (data.tacticalStateSnapshot) {
             tacticalSnapshotRef.current = data.tacticalStateSnapshot;
           }
+          pingDataRef.current = data;
           setPingData(data);
 
           if (data.newlyCollectedBonusNodeId) {
@@ -991,6 +1036,10 @@ export function RadarGameClient({
       selectedMission.status === "PAUSED" || selectedMission.status === "DRAFT";
     let active = true;
     let pollTimer: number | null = null;
+    let coarseWarmupTimer: number | null = null;
+    let pendingCoarseFix: { lat: number; lng: number; accuracy: number } | null =
+      null;
+    const watcherStartedAtMs = Date.now();
 
     const getAdaptiveIntervalMs = (): number => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
@@ -1008,47 +1057,85 @@ export function RadarGameClient({
     };
 
     const scheduleNextPing = () => {
-      if (!active || isPausedOrDraft) return;
+      if (!active || isPausedOrDraft || !hasLiveGpsFixRef.current) return;
       if (pollTimer !== null) window.clearTimeout(pollTimer);
       pollTimer = window.setTimeout(async () => {
-        if (!active || isPausedOrDraft) return;
+        if (!active || isPausedOrDraft || !hasLiveGpsFixRef.current) return;
         await sendRadarPing(coordsRef.current);
         scheduleNextPing();
       }, getAdaptiveIntervalMs());
     };
 
+    const acceptLiveFix = (next: { lat: number; lng: number; accuracy: number }) => {
+      if (!active) return;
+      if (coarseWarmupTimer !== null) {
+        window.clearTimeout(coarseWarmupTimer);
+        coarseWarmupTimer = null;
+      }
+      pendingCoarseFix = null;
+
+      try {
+        localStorage.setItem(
+          "rq_last_known_coords",
+          JSON.stringify({
+            lat: next.lat,
+            lng: next.lng,
+            accuracy: next.accuracy,
+            savedAt: Date.now(),
+          })
+        );
+      } catch {}
+
+      const isFirstLiveFix = !hasLiveGpsFixRef.current;
+      hasLiveGpsFixRef.current = true;
+      coordsOriginRef.current = "live";
+      coordsRef.current = next;
+      setHasLiveGpsFix(true);
+      setCoordsOrigin("live");
+      setCoords(next);
+
+      if (isPausedOrDraft) return;
+
+      const prevPinged = lastPingedCoordsRef.current;
+      const elapsedSincePing = Date.now() - lastPingSentAtRef.current;
+      const movedMeters = prevPinged
+        ? calculateHaversineMeters(prevPinged.lat, prevPinged.lng, next.lat, next.lng)
+        : 999;
+      if (isFirstLiveFix || (movedMeters >= 6 && elapsedSincePing >= 2500)) {
+        sendRadarPing(next).then(scheduleNextPing);
+      }
+    };
+
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
+        if (!active) return;
         const next = {
           lat: Number(pos.coords.latitude.toFixed(6)),
           lng: Number(pos.coords.longitude.toFixed(6)),
           accuracy: Math.round(pos.coords.accuracy || 12),
         };
-        try {
-          localStorage.setItem(
-            "rq_last_known_coords",
-            JSON.stringify({
-              lat: next.lat,
-              lng: next.lng,
-              accuracy: next.accuracy,
-              savedAt: Date.now(),
-            })
-          );
-        } catch {}
-        setHasLiveGpsFix(true);
-        setCoordsOrigin("live");
-        setCoords(next);
 
-        if (isPausedOrDraft) return;
-
-        const prevPinged = lastPingedCoordsRef.current;
-        const elapsedSincePing = Date.now() - lastPingSentAtRef.current;
-        const movedMeters = prevPinged
-          ? calculateHaversineMeters(prevPinged.lat, prevPinged.lng, next.lat, next.lng)
-          : 999;
-        if (movedMeters >= 6 && elapsedSincePing >= 2500) {
-          sendRadarPing(next).then(scheduleNextPing);
+        // Si el primer fix inicial llega por antena/Wi-Fi (>180 m), esperar brevemente (hasta 3.5 s)
+        // a que cierre el chip GPS para evitar un salto artificial al arrancar.
+        const elapsedWarmupMs = Date.now() - watcherStartedAtMs;
+        if (
+          !hasLiveGpsFixRef.current &&
+          next.accuracy > 180 &&
+          elapsedWarmupMs < 3500
+        ) {
+          pendingCoarseFix = next;
+          if (coarseWarmupTimer === null) {
+            coarseWarmupTimer = window.setTimeout(() => {
+              coarseWarmupTimer = null;
+              if (active && pendingCoarseFix && !hasLiveGpsFixRef.current) {
+                acceptLiveFix(pendingCoarseFix);
+              }
+            }, Math.max(250, 3500 - elapsedWarmupMs));
+          }
+          return;
         }
+
+        acceptLiveFix(next);
       },
       () => {},
       {
@@ -1059,7 +1146,7 @@ export function RadarGameClient({
     );
 
     const onVisibilityWake = () => {
-      if (isPausedOrDraft) return;
+      if (!active || isPausedOrDraft || !hasLiveGpsFixRef.current) return;
       if (document.visibilityState === "visible") {
         sendRadarPing(coordsRef.current).then(scheduleNextPing);
       } else {
@@ -1068,7 +1155,7 @@ export function RadarGameClient({
     };
     document.addEventListener("visibilitychange", onVisibilityWake);
 
-    if (!isPausedOrDraft) {
+    if (!isPausedOrDraft && hasLiveGpsFixRef.current) {
       sendRadarPing(coordsRef.current).then(scheduleNextPing);
     }
 
@@ -1076,6 +1163,7 @@ export function RadarGameClient({
       active = false;
       navigator.geolocation.clearWatch(watchId);
       if (pollTimer !== null) window.clearTimeout(pollTimer);
+      if (coarseWarmupTimer !== null) window.clearTimeout(coarseWarmupTimer);
       document.removeEventListener("visibilitychange", onVisibilityWake);
     };
   }, [hunter, selectedMission, gpsMode, sendRadarPing]);
@@ -1103,6 +1191,10 @@ export function RadarGameClient({
       });
       const step = await res.json();
       if (res.ok && step.ok) {
+        hasLiveGpsFixRef.current = false;
+        gpsModeRef.current = "simulator";
+        coordsOriginRef.current = "simulator";
+        setHasLiveGpsFix(false);
         setGpsMode("simulator");
         setCoordsOrigin("simulator");
         const nextCoords = {
@@ -1110,6 +1202,7 @@ export function RadarGameClient({
           lng: step.lng,
           accuracy: step.accuracy,
         };
+        coordsRef.current = nextCoords;
         setCoords(nextCoords);
         if (step.demoQrCode) setDemoQrHint(step.demoQrCode);
         await sendRadarPing(nextCoords);
@@ -1236,6 +1329,9 @@ export function RadarGameClient({
         const fresh = await getFreshGpsCoords(null, 5000);
         if (fresh) {
           activeCoords = fresh;
+          hasLiveGpsFixRef.current = true;
+          coordsOriginRef.current = "live";
+          coordsRef.current = fresh;
           setHasLiveGpsFix(true);
           setCoordsOrigin("live");
           setCoords(fresh);
@@ -1254,7 +1350,7 @@ export function RadarGameClient({
           lng: activeCoords.lng,
           accuracy: activeCoords.accuracy,
           hunterId: hunter.id,
-          alias: hunter.alias,
+          alias: sanitizePublicAlias(hunter.alias),
           sessionToken,
         }),
       });
@@ -1272,7 +1368,7 @@ export function RadarGameClient({
                 ? {
                     ...m,
                     status: "CAPTURED",
-                    winnerAlias: hunter.alias,
+                    winnerAlias: sanitizePublicAlias(hunter.alias),
                   }
                 : m
             )
@@ -1379,7 +1475,7 @@ export function RadarGameClient({
                   <p className="text-[10px] text-cyan-300 truncate flex items-center gap-1 font-mono">
                     {hunter ? (
                       <>
-                        <span>{hunter.alias}</span>
+                        <span>{sanitizePublicAlias(hunter.alias)}</span>
                         <span>•</span>
                         {wakeLockActive && (
                           <Sun className="w-2.5 h-2.5 text-amber-300 shrink-0" />
@@ -1797,8 +1893,12 @@ export function RadarGameClient({
                   <button
                     type="button"
                     onClick={() => {
+                      hasLiveGpsFixRef.current = false;
+                      gpsModeRef.current = "real";
+                      coordsOriginRef.current = "fallback";
+                      setHasLiveGpsFix(false);
                       setGpsMode("real");
-                      setCoordsOrigin(hasLiveGpsFix ? "live" : "fallback");
+                      setCoordsOrigin("fallback");
                     }}
                     className={`px-2 py-0.5 rf-btn-steel text-[9px] ${
                       gpsMode === "real" ? "opacity-100" : "opacity-60"
@@ -1870,7 +1970,7 @@ export function RadarGameClient({
               <ViralRecorder
                 brand={brand}
                 mission={selectedMission}
-                hunterAlias={hunter?.alias || "@cazador"}
+                hunterAlias={sanitizePublicAlias(hunter?.alias)}
                 thermalState={currentThermal}
                 activeHunters={pingData?.activeHuntersCount ?? 1}
                 tacticalHintMessage={pingData?.tacticalHint?.message || null}
@@ -2029,7 +2129,9 @@ export function RadarGameClient({
                         <p className="text-xs text-slate-200 leading-snug">
                           El Premio Mayor ya fue reclamado por{" "}
                           <strong className="text-yellow-300">
-                            {selectedMission.winnerAlias || "otro cazador"}
+                            {selectedMission.winnerAlias
+                              ? sanitizePublicAlias(selectedMission.winnerAlias)
+                              : "otro cazador"}
                           </strong>
                           . ¡Pero completaste la búsqueda física! Registrá tu llegada para canjear tu{" "}
                           <strong className="text-cyan-300">Premio Oficial de Consuelo</strong>.
@@ -2342,7 +2444,8 @@ export function RadarGameClient({
                               </span>
                               <div className="min-w-0">
                                 <p className="text-xs font-extrabold text-white truncate">
-                                  {entry.alias} {isMe && <span className="text-cyan-300">(TÚ)</span>}
+                                  {sanitizePublicAlias(entry.alias)}{" "}
+                                  {isMe && <span className="text-cyan-300">(TÚ)</span>}
                                 </p>
                                 <p className="text-[10px] text-slate-400 truncate">
                                   {entry.majorPrizesCount > 0
@@ -2457,7 +2560,7 @@ export function RadarGameClient({
                         ? {
                             ...m,
                             status: "CAPTURED",
-                            winnerAlias: hunter.alias,
+                            winnerAlias: sanitizePublicAlias(hunter.alias),
                           }
                         : m
                     )

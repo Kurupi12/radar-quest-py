@@ -36,6 +36,7 @@ import type {
   ThermalState,
   ValidationMode,
 } from "@/types/radar";
+import { sanitizePublicAlias } from "@/lib/radar/aliasPrivacy";
 import { computePublicZoneCenter } from "@/lib/radar/geo";
 import {
   fromPrismaThermal,
@@ -103,7 +104,7 @@ export function mapPrismaMission(m: PrismaMission): Mission {
     validationMode: ((m as any).validationMode as ValidationMode) || "HYBRID",
     status: m.status,
     winnerHunterId: m.winnerHunterId,
-    winnerAlias: m.winnerAlias,
+    winnerAlias: m.winnerAlias ? sanitizePublicAlias(m.winnerAlias) : null,
     winnerClaimCode: m.winnerClaimCode,
     capturedAt: m.capturedAt ? m.capturedAt.toISOString() : null,
     createdAt: m.createdAt.toISOString(),
@@ -126,7 +127,7 @@ export function mapPrismaNode(n: PrismaNode): ReusableQrNode {
 export function mapPrismaHunter(h: PrismaHunter): Hunter {
   return {
     id: h.id,
-    alias: h.alias,
+    alias: sanitizePublicAlias(h.alias),
     whatsapp: h.whatsapp,
     isAdult18: h.isAdult18,
     createdAt: h.createdAt.toISOString(),
@@ -140,7 +141,7 @@ export function mapPrismaTelemetry(
     id: t.id,
     missionId: t.missionId,
     hunterId: t.hunterId,
-    alias: t.alias,
+    alias: sanitizePublicAlias(t.alias),
     lastLat: t.lastLat,
     lastLng: t.lastLng,
     lastAccuracy: t.lastAccuracy,
@@ -162,7 +163,7 @@ export function mapPrismaClaim(c: PrismaClaim): MissionClaim {
     missionId: c.missionId,
     brandId: c.brandId,
     hunterId: c.hunterId,
-    alias: c.alias,
+    alias: sanitizePublicAlias(c.alias),
     whatsapp: c.whatsapp,
     claimType: c.claimType,
     couponCode: c.couponCode,
@@ -181,7 +182,7 @@ export function mapPrismaLead(l: PrismaBrandLead): BrandLead {
     id: l.id,
     brandId: l.brandId,
     hunterId: l.hunterId,
-    alias: l.alias,
+    alias: sanitizePublicAlias(l.alias),
     whatsapp: l.whatsapp,
     isAdult18: l.isAdult18,
     sourceMissionId: l.sourceMissionId,
@@ -221,7 +222,7 @@ export function mapPrismaPing(p: PrismaHunterPing): HunterPing {
     id: p.id,
     missionId: p.missionId,
     hunterId: p.hunterId,
-    alias: p.alias,
+    alias: sanitizePublicAlias(p.alias),
     lat: p.lat,
     lng: p.lng,
     accuracy: p.accuracy,
@@ -291,7 +292,9 @@ export function toPublicMission(mission: Mission): PublicMission {
     minPingsForMajorPrize: mission.minPingsForMajorPrize,
     validationMode: mission.validationMode || "HYBRID",
     status: mission.status,
-    winnerAlias: mission.winnerAlias,
+    winnerAlias: mission.winnerAlias
+      ? sanitizePublicAlias(mission.winnerAlias)
+      : null,
     capturedAt: mission.capturedAt,
   };
 }
@@ -1010,7 +1013,8 @@ export async function findHunterById(hunterId: string): Promise<Hunter | null> {
       console.warn("[Store] Prisma findHunterById error, falling back to local DB:", err);
     }
   }
-  return getDb().hunters.find((h) => h.id === hunterId) || null;
+  const found = getDb().hunters.find((h) => h.id === hunterId) || null;
+  return found ? { ...found, alias: sanitizePublicAlias(found.alias) } : null;
 }
 
 export async function upsertHunterAndLead(params: {
@@ -1020,6 +1024,7 @@ export async function upsertHunterAndLead(params: {
   brand: Brand;
   sourceMissionId: string | null;
 }): Promise<Hunter> {
+  const safeAlias = sanitizePublicAlias(params.alias);
   if (isCloudDbEnabled()) {
     try {
       const prisma = getPrisma();
@@ -1033,11 +1038,11 @@ export async function upsertHunterAndLead(params: {
       const hunter = await prisma.hunter.upsert({
         where: { whatsapp: params.whatsapp },
         update: {
-          alias: params.alias,
+          alias: safeAlias,
           ...(params.isAdult18 ? { isAdult18: true } : {}),
         },
         create: {
-          alias: params.alias,
+          alias: safeAlias,
           whatsapp: params.whatsapp,
           isAdult18: params.isAdult18,
         },
@@ -1051,13 +1056,13 @@ export async function upsertHunterAndLead(params: {
           },
         },
         update: {
-          alias: params.alias,
+          alias: safeAlias,
           ...(params.isAdult18 ? { isAdult18: true } : {}),
         },
         create: {
           brandId: params.brand.id,
           hunterId: hunter.id,
-          alias: params.alias,
+          alias: safeAlias,
           whatsapp: params.whatsapp,
           isAdult18: hunter.isAdult18,
           sourceMissionId: params.sourceMissionId,
@@ -1077,14 +1082,14 @@ export async function upsertHunterAndLead(params: {
   if (!hunter) {
     hunter = {
       id: `hnt_${crypto.randomUUID().slice(0, 10)}`,
-      alias: params.alias,
+      alias: safeAlias,
       whatsapp: params.whatsapp,
       isAdult18: params.isAdult18,
       createdAt: now,
     };
     db.hunters.push(hunter);
   } else {
-    hunter.alias = params.alias;
+    hunter.alias = safeAlias;
     if (params.isAdult18) hunter.isAdult18 = true;
   }
 
@@ -1100,7 +1105,7 @@ export async function upsertHunterAndLead(params: {
       id: `lead_${crypto.randomUUID().slice(0, 10)}`,
       brandId: params.brand.id,
       hunterId: hunter.id,
-      alias: params.alias,
+      alias: safeAlias,
       whatsapp: params.whatsapp,
       isAdult18: hunter.isAdult18,
       sourceMissionId: params.sourceMissionId,
@@ -1108,7 +1113,7 @@ export async function upsertHunterAndLead(params: {
       createdAt: now,
     });
   } else {
-    existingLead.alias = params.alias;
+    existingLead.alias = safeAlias;
     if (params.isAdult18) existingLead.isAdult18 = true;
   }
 
@@ -1167,14 +1172,25 @@ export async function getBrandAdminBundle(brandId: string): Promise<{
   }
 
   const db = getDb();
-  const missions = db.missions.filter((m) => m.brandId === brandId);
+  const missions = db.missions
+    .filter((m) => m.brandId === brandId)
+    .map((m) => ({
+      ...m,
+      winnerAlias: m.winnerAlias ? sanitizePublicAlias(m.winnerAlias) : null,
+    }));
   const missionIds = new Set(missions.map((m) => m.id));
   return {
     missions,
     reusableNodes: db.reusableNodes.filter((n) => n.brandId === brandId),
-    leads: db.leads.filter((l) => l.brandId === brandId),
-    claims: db.claims.filter((c) => c.brandId === brandId),
-    telemetry: db.telemetry.filter((t) => missionIds.has(t.missionId)),
+    leads: db.leads
+      .filter((l) => l.brandId === brandId)
+      .map((l) => ({ ...l, alias: sanitizePublicAlias(l.alias) })),
+    claims: db.claims
+      .filter((c) => c.brandId === brandId)
+      .map((c) => ({ ...c, alias: sanitizePublicAlias(c.alias) })),
+    telemetry: db.telemetry
+      .filter((t) => missionIds.has(t.missionId))
+      .map((t) => ({ ...t, alias: sanitizePublicAlias(t.alias) })),
   };
 }
 
@@ -2085,11 +2101,12 @@ export async function getBrandLeaderboardAndHistory(
 
   const aggMap = new Map<string, AggRow>();
   const ensureAgg = (hId: string, alias: string): AggRow => {
+    const safeAlias = sanitizePublicAlias(alias);
     let row = aggMap.get(hId);
     if (!row) {
       row = {
         hunterId: hId,
-        alias: alias || "@cazador",
+        alias: safeAlias,
         capturesCount: 0,
         majorPrizesCount: 0,
         fastestCaptureSeconds: null,
@@ -2101,8 +2118,8 @@ export async function getBrandLeaderboardAndHistory(
         lastCaptureAt: null,
       };
       aggMap.set(hId, row);
-    } else if (alias && alias.startsWith("@")) {
-      row.alias = alias;
+    } else if (safeAlias && safeAlias !== "@cazador") {
+      row.alias = safeAlias;
     }
     return row;
   };

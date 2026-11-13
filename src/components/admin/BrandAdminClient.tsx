@@ -46,6 +46,7 @@ import type {
   ReusableQrNode,
   ValidationMode,
 } from "@/types/radar";
+import { sanitizePublicAlias } from "@/lib/radar/aliasPrivacy";
 import {
   extractCoordinatesFromInput,
   PARAGUAY_CITIES,
@@ -928,7 +929,7 @@ export function BrandAdminClient({
                     }
                     liveHunters={(liveData?.leaderboard || []).map((h) => ({
                       hunterId: h.hunterId,
-                      alias: h.alias,
+                      alias: sanitizePublicAlias(h.alias),
                       lat: h.lastLat,
                       lng: h.lastLng,
                       distanceMeters: h.lastDistanceMeters,
@@ -983,7 +984,7 @@ export function BrandAdminClient({
                               {idx + 1}
                             </span>
                             <span className="font-bold text-sm text-white">
-                              {row.alias}
+                              {sanitizePublicAlias(row.alias)}
                             </span>
                             {row.inVehicleMode && (
                               <span className="px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-300 border border-amber-400/40 inline-flex items-center gap-1">
@@ -1070,7 +1071,7 @@ export function BrandAdminClient({
                     >
                       <div>
                         <span className="font-bold text-white">
-                          {lead.alias}
+                          {sanitizePublicAlias(lead.alias)}
                         </span>{" "}
                         <span className="text-slate-400">({lead.city})</span>
                       </div>
@@ -1107,7 +1108,7 @@ export function BrandAdminClient({
                       >
                         <div>
                           <p className="font-bold text-white">
-                            {clm.alias} •{" "}
+                            {sanitizePublicAlias(clm.alias)} •{" "}
                             <span className="font-mono text-amber-300">
                               {clm.couponCode}
                             </span>
@@ -1605,7 +1606,12 @@ export function BrandAdminClient({
 
                     {m.status === "CAPTURED" && (
                       <div className="p-2 rounded bg-amber-950/60 border border-amber-400/50 text-amber-200 flex items-center justify-between">
-                        <span>Ganador: {m.winnerAlias}</span>
+                        <span>
+                          Ganador:{" "}
+                          {m.winnerAlias
+                            ? sanitizePublicAlias(m.winnerAlias)
+                            : "un cazador"}
+                        </span>
                         <button
                           type="button"
                           onClick={() =>
@@ -1707,7 +1713,12 @@ export function BrandAdminClient({
               ) : (
                 <div className="p-3 rounded-lg bg-amber-950/60 border border-amber-400/50 text-amber-300 text-xs">
                   Aviso: Este drop ya fue capturado por{" "}
-                  <strong className="text-white">{deletingMission.winnerAlias || "un cazador"}</strong>.
+                  <strong className="text-white">
+                    {deletingMission.winnerAlias
+                      ? sanitizePublicAlias(deletingMission.winnerAlias)
+                      : "un cazador"}
+                  </strong>
+                  .
                   Se eliminarán los registros históricos del mapa.
                 </div>
               )}

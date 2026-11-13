@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasBrandAdminAccess } from "@/lib/auth/adminAuth";
 import { findBrandBySlug, getBrandAdminBundle } from "@/lib/db/store";
+import { sanitizePublicAlias } from "@/lib/radar/aliasPrivacy";
 
 function escapeCsvCell(
   val: string | number | boolean | null | undefined
@@ -55,7 +56,7 @@ export async function GET(request: Request) {
     return [
       lead.id,
       brand.name,
-      lead.alias,
+      sanitizePublicAlias(lead.alias),
       lead.whatsapp,
       `https://wa.me/${cleanDigits}`,
       lead.isAdult18 ? "SI" : "NO",

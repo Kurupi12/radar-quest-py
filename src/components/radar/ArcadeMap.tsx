@@ -10,6 +10,7 @@ import {
   type MapMouseEvent,
 } from "maplibre-gl";
 import type { RouteBonusBeacon } from "@/types/radar";
+import { sanitizePublicAlias } from "@/lib/radar/aliasPrivacy";
 import {
   registerAllRpgTextures,
   setRpgTreesVisibility,
@@ -929,6 +930,10 @@ export function ArcadeMap({
     hunterMarkersRef.current = [];
 
     for (const h of liveHunters) {
+      const safeLabel = sanitizePublicAlias(h.alias)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
       const el = document.createElement("div");
       const badgeColor =
         h.distanceMeters <= 35
@@ -939,7 +944,7 @@ export function ArcadeMap({
       el.innerHTML = `
         <div style="display:flex;flex-direction:column;align-items:center;">
           <span style="background:#140b29;border:1px solid ${badgeColor};color:#fff;font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap;display:inline-flex;align-items:center;">
-            ${h.inVehicleMode ? CAR_SVG_HTML : WALKER_SVG_HTML}<span>${h.alias} (${Math.round(
+            ${h.inVehicleMode ? CAR_SVG_HTML : WALKER_SVG_HTML}<span>${safeLabel} (${Math.round(
         h.distanceMeters
       )}m)</span>
           </span>
