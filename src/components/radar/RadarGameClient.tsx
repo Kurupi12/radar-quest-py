@@ -1816,20 +1816,6 @@ export function RadarGameClient({
                       {selectedMission.prizeTitle}
                     </span>
                   </span>
-                  {selectedMission.status === "ACTIVE" &&
-                    pingData?.proofOfHuntProgress && (
-                    <span
-                      className={`px-1.5 py-0.5 rounded border text-[9px] font-mono font-bold shrink-0 ${
-                        pingData.proofOfHuntProgress.ready
-                          ? "bg-emerald-950/80 border-emerald-400 text-emerald-300"
-                          : "bg-slate-900/90 border-cyan-500/40 text-cyan-200"
-                      }`}
-                      title="Pulsos válidos de rastreo requeridos para optar por el Premio Mayor"
-                    >
-                      RASTREO {pingData.proofOfHuntProgress.currentValidPings}/
-                      {pingData.proofOfHuntProgress.requiredPings}
-                    </span>
-                  )}
                 </div>
 
                 {selectedMission.status === "ACTIVE" &&
