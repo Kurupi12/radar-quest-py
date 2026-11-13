@@ -293,16 +293,7 @@ export async function processRadarPing(
   const safeAcc = Math.max(1, input.accuracy || 10);
   const climaxLevel = computeClimaxLevel(thermalState, distanceToSecret);
 
-  const rawBeacons = computeMissionBonusBeacons(
-    mission.id,
-    mission.publicCenterLat,
-    mission.publicCenterLng,
-    mission.zoneRadiusMeters
-  );
-  let bonusNodes: RouteBonusBeacon[] = rawBeacons.map((b) => ({
-    ...b,
-    collected: false,
-  }));
+  let bonusNodes: RouteBonusBeacon[] = [];
   let newlyCollectedBonusNodeId: string | null = null;
   let triangulationCooldownBoostMs = 0;
 
@@ -311,13 +302,49 @@ export async function processRadarPing(
   let rivalCount = 0;
   let kinematicSamples: KinematicPingSample[] = [];
 
+  const resolveBeaconAnchor = (
+    earliestValidCandidates: Array<{ lat: number; lng: number }>
+  ): { lat: number; lng: number } | null => {
+    const firstReal = earliestValidCandidates.find(
+      (p) =>
+        calculateHaversineMeters(
+          p.lat,
+          p.lng,
+          mission.publicCenterLat,
+          mission.publicCenterLng
+        ) >= 35
+    );
+    if (firstReal) return { lat: firstReal.lat, lng: firstReal.lng };
+    if (
+      !isTeleportAnomaly &&
+      calculateHaversineMeters(
+        input.lat,
+        input.lng,
+        mission.publicCenterLat,
+        mission.publicCenterLng
+      ) >= 35
+    ) {
+      return { lat: input.lat, lng: input.lng };
+    }
+    return null;
+  };
+
   const evaluateBeaconsAgainstHistory = (
-    priorWalkingCoords: Array<{ lat: number; lng: number }>
+    priorWalkingCoords: Array<{ lat: number; lng: number }>,
+    anchorCoords: { lat: number; lng: number } | null
   ): number => {
     if (mission.status !== "ACTIVE") {
       bonusNodes = [];
       return 0;
     }
+
+    const rawBeacons = computeMissionBonusBeacons(
+      mission.id,
+      mission.publicCenterLat,
+      mission.publicCenterLng,
+      mission.zoneRadiusMeters,
+      anchorCoords
+    );
 
     const collectedIds = new Set<string>();
     for (const b of rawBeacons) {
@@ -360,19 +387,35 @@ export async function processRadarPing(
       const windowCutoff = new Date(nowMs - ACTIVE_HUNTER_WINDOW_MS);
       const kinematicCutoff = new Date(nowMs - TACTICAL_KINEMATIC_WINDOW_MS);
 
-      const priorWalkingPings = await prisma.hunterPing.findMany({
-        where: {
-          missionId: mission.id,
-          hunterId: input.hunterId,
-          isAnomaly: false,
-          inVehicleMode: false,
-        },
-        orderBy: { createdAt: "desc" },
-        take: 250,
-        select: { lat: true, lng: true },
-      });
+      const [priorWalkingPings, earliestPings] = await Promise.all([
+        prisma.hunterPing.findMany({
+          where: {
+            missionId: mission.id,
+            hunterId: input.hunterId,
+            isAnomaly: false,
+            inVehicleMode: false,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 250,
+          select: { lat: true, lng: true },
+        }),
+        prisma.hunterPing.findMany({
+          where: {
+            missionId: mission.id,
+            hunterId: input.hunterId,
+            isAnomaly: false,
+          },
+          orderBy: { createdAt: "asc" },
+          take: 25,
+          select: { lat: true, lng: true },
+        }),
+      ]);
 
-      const validPingIncrement = evaluateBeaconsAgainstHistory(priorWalkingPings);
+      const anchorCoords = resolveBeaconAnchor(earliestPings);
+      const validPingIncrement = evaluateBeaconsAgainstHistory(
+        priorWalkingPings,
+        anchorCoords
+      );
 
       // Ensure hunter FK exists in cloud DB
       await prisma.hunter.upsert({
@@ -506,14 +549,19 @@ export async function processRadarPing(
 
   if (!cloudProcessed) {
     const db = getDb();
-    const priorWalkingPings = db.hunterPings.filter(
+    const priorNonAnomaly = db.hunterPings.filter(
       (p) =>
         p.missionId === mission.id &&
         p.hunterId === input.hunterId &&
-        !p.isAnomaly &&
-        !p.inVehicleMode
+        !p.isAnomaly
     );
-    const validPingIncrement = evaluateBeaconsAgainstHistory(priorWalkingPings);
+    const priorWalkingPings = priorNonAnomaly.filter((p) => !p.inVehicleMode);
+    // hunterPings uses unshift (newest first), so iterate oldest-first for anchor resolution
+    const anchorCoords = resolveBeaconAnchor([...priorNonAnomaly].reverse());
+    const validPingIncrement = evaluateBeaconsAgainstHistory(
+      priorWalkingPings,
+      anchorCoords
+    );
 
     // Append individual HunterPing record (keep capped at last 500 pings in local JSON store)
     db.hunterPings.unshift({

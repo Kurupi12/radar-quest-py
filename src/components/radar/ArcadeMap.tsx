@@ -75,8 +75,6 @@ const CAR_SVG_HTML = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height=
 
 const WALKER_SVG_HTML = `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:3px;"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>`;
 
-const BEACON_SVG_HTML = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
-
 const BEACON_DONE_SVG_HTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;"><polyline points="20 6 9 17 4 12"/></svg>`;
 
 function buildHeatmapGeoJson(points: MapHeatmapPoint[]) {
@@ -692,11 +690,22 @@ export function ArcadeMap({
     map.on("style.load", applyArcade16BitPalette);
     map.on("load", applyArcade16BitPalette);
 
-    map.on("moveend", () => {
+    const syncTreesIfRpg = () => {
       if (activeThemeRef.current === "rpg-16bit") {
         try {
           syncRpgTreesOnMap(map);
         } catch {}
+      }
+    };
+
+    map.on("moveend", syncTreesIfRpg);
+    map.on("zoomend", syncTreesIfRpg);
+    map.on("idle", () => {
+      if (
+        activeThemeRef.current === "rpg-16bit" &&
+        !map.getLayer("rpg-trees-layer")
+      ) {
+        syncTreesIfRpg();
       }
     });
 
@@ -918,7 +927,7 @@ export function ArcadeMap({
     }
   }, [liveHunters, mode]);
 
-  // Public-Zone Deterministic Bonus Beacons (player mode)
+  // Public-Zone Route Bonus Beacons rendered with 16-bit PixelLab Repeater Tower sprite (player mode)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || mode !== "player") return;
@@ -930,17 +939,21 @@ export function ArcadeMap({
       const el = document.createElement("div");
       const accent = beacon.collected ? "#22c55e" : "#00f0ff";
       const bg = beacon.collected ? "#052e16" : "#082f49";
+      const towerFilter = beacon.collected
+        ? "hue-rotate(-45deg) saturate(1.15) drop-shadow(0 0 6px #22c55e)"
+        : "drop-shadow(0 0 7px #00f0ff)";
       el.className = "pointer-events-none select-none";
       el.innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;">
-          <span style="background:${bg};border:2px solid ${accent};color:${accent};font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 0 10px ${accent}55;display:inline-flex;align-items:center;gap:3px;">
-            ${beacon.collected ? BEACON_DONE_SVG_HTML : BEACON_SVG_HTML}
+        <div style="display:flex;flex-direction:column;align-items:center;position:relative;">
+          <span style="background:${bg};border:1.5px solid ${accent};color:${accent};font-size:8.5px;font-weight:900;letter-spacing:0.04em;padding:1px 5px;border-radius:3px;white-space:nowrap;box-shadow:0 0 8px ${accent}55;display:inline-flex;align-items:center;gap:3px;margin-bottom:2px;">
+            ${beacon.collected ? BEACON_DONE_SVG_HTML : ""}
             <span>${beacon.collected ? "ACTIVADA" : beacon.label}</span>
           </span>
-          <span style="width:10px;height:10px;background:${accent};border:2px solid #ffffff;transform:rotate(45deg);margin-top:2px;box-shadow:0 0 8px ${accent};"></span>
+          <img src="/sprites/beacon_tower.png" alt="${beacon.label}" width="40" height="40" style="width:40px;height:40px;object-fit:contain;image-rendering:pixelated;filter:${towerFilter};position:relative;z-index:2;" />
+          <span class="${beacon.collected ? "" : "rf-beacon-ring"}" style="width:18px;height:8px;border-radius:9999px;border:2px solid ${accent};background:${accent}33;margin-top:-5px;z-index:1;"></span>
         </div>
       `;
-      const m = new Marker({ element: el })
+      const m = new Marker({ element: el, anchor: "bottom" })
         .setLngLat([beacon.lng, beacon.lat])
         .addTo(map);
       beaconMarkersRef.current.push(m);

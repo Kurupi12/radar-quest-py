@@ -643,6 +643,21 @@ h4 {
   );
 }
 
+@keyframes rfBeaconPulse {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.22);
+    opacity: 0.45;
+  }
+}
+
+.rf-beacon-ring {
+  animation: rfBeaconPulse 1.8s ease-in-out infinite;
+}
+
 
 
 

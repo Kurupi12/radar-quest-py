@@ -559,7 +559,17 @@ export interface TreeFeatureCollection {
  * Generates deterministic GeoJSON tree features across a bounding box
  */
 export function generateRpgTreesGeoJson(bounds: TreeBounds): TreeFeatureCollection {
-  const step = 0.00035; // ~38 meters per cell
+  const baseStep = 0.00035; // ~38 meters per cell
+  const lngSpan = Math.max(0.0001, bounds.east - bounds.west);
+  const latSpan = Math.max(0.0001, bounds.north - bounds.south);
+  const estCells = (lngSpan / baseStep) * (latSpan / baseStep);
+  // Discrete deterministic grid LOD tiers keep tree positions locked when panning while staying 60fps zoomed out
+  const step =
+    estCells > 14_000
+      ? baseStep * 4
+      : estCells > 3_600
+      ? baseStep * 2
+      : baseStep;
   const features: TreeFeature[] = [];
 
   const startX = Math.floor(bounds.west / step);
@@ -655,7 +665,7 @@ export function setRpgTreesVisibility(
   map: MapLibreMap,
   visible: boolean
 ): void {
-  if (!map.isStyleLoaded()) return;
+  if (!map.getStyle()) return;
   try {
     if (map.getLayer(RPG_TREES_LAYER_ID)) {
       map.setLayoutProperty(
@@ -673,7 +683,8 @@ export function setRpgTreesVisibility(
  * Syncs the procedural RPG tree layer based on current map viewport bounds
  */
 export function syncRpgTreesOnMap(map: MapLibreMap): void {
-  if (!map.isStyleLoaded()) return;
+  if (!map.getStyle()) return;
+  registerAllRpgTextures(map);
 
   const bounds = map.getBounds();
   const lngSpan = bounds.getEast() - bounds.getWest();
@@ -714,15 +725,17 @@ export function syncRpgTreesOnMap(map: MapLibreMap): void {
         id: RPG_TREES_LAYER_ID,
         type: "symbol",
         source: RPG_TREES_SOURCE_ID,
-        minzoom: 14,
+        minzoom: 12,
         layout: {
           "icon-image": ["get", "treeType"],
           "icon-size": [
             "interpolate",
             ["linear"],
             ["zoom"],
+            12,
+            0.38,
             14,
-            0.55,
+            0.58,
             16,
             0.85,
             18,

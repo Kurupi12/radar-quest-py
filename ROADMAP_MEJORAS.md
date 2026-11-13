@@ -38,7 +38,7 @@ Documento vivo de seguimiento técnico y de jugabilidad para implementar mejoras
 ## Prioridad Media (Retención, profundidad de juego y viralidad)
 
 - [x] **7. Micro-mecánicas activas durante la caminata (Agencia del jugador)** *(Completado)*
-  - Incorporado **"Pulso de Triangulación"** (`POST /api/radar/triangulate`, cooldown `60 s`, barrido visual de sector de `45°` durante `4 s`) y 2 **Balizas de Ruta** públicas por misión que suman `+1 Proof of Hunt` y reducen `-15 s` el cooldown de triangulación (ciclo estocástico de congelamiento `¡BRRR!` automático sin interacción táctil).
+  - Incorporado **"Pulso de Triangulación"** (`POST /api/radar/triangulate`, cooldown `60 s`, barrido visual de sector de `45°` durante `4 s`) y 2 **Balizas de Ruta (Antena Repetidora 16-bit PixelLab `/sprites/beacon_tower.png`)** ubicadas al `40%–50%` entre el punto inicial del cazador y el centro público de la zona, que suman `+1 Proof of Hunt` y reducen `-15 s` el cooldown de triangulación (ciclo estocástico de congelamiento `¡BRRR!` automático sin interacción táctil).
 
 - [x] **8. Ranking (*Leaderboard*) por Marca/Ciudad e historial del cazador** *(Completado)*
   - Endpoint `GET /api/radar/leaderboard` y modal **"Salón de Cazadores"** en el HUD con mejores tiempos de captura, capturas totales, filtro por ciudad y pestaña **"Mi Historial"**.

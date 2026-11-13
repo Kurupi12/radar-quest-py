@@ -362,14 +362,16 @@ export interface DeterministicBonusBeacon {
 }
 
 /**
- * Generates 2 deterministic public-zone route bonus beacons strictly from the public zone center
- * and mission ID (NEVER derived from secretLat/secretLng).
+ * Generates 2 deterministic route bonus beacons placed at 40%-50% between
+ * the hunter's starting mission anchor and the fuzzy public zone center
+ * (NEVER derived from secretLat/secretLng, with lateral spread to avoid leaking a straight ray).
  */
 export function computeMissionBonusBeacons(
   missionId: string,
   publicCenterLat: number,
   publicCenterLng: number,
-  zoneRadiusMeters: number
+  zoneRadiusMeters: number,
+  hunterAnchor?: { lat: number; lng: number } | null
 ): DeterministicBonusBeacon[] {
   let hash = 2166136261;
   for (let i = 0; i < missionId.length; i++) {
@@ -377,17 +379,88 @@ export function computeMissionBonusBeacons(
     hash = Math.imul(hash, 16777619);
   }
 
-  const maxOffset = Math.max(120, Math.min(460, zoneRadiusMeters * 0.62));
-  const minOffset = Math.min(maxOffset - 20, Math.max(95, zoneRadiusMeters * 0.25));
-  const span = Math.max(25, maxOffset - minOffset);
+  let pos1: { lat: number; lng: number } | null = null;
+  let pos2: { lat: number; lng: number } | null = null;
 
-  const angle1 = Math.abs(hash) % 360;
-  const dist1 = minOffset + (Math.abs(hash >>> 8) % span);
-  const pos1 = offsetCoordsByBearingMeters(publicCenterLat, publicCenterLng, angle1, dist1);
+  if (
+    hunterAnchor &&
+    Number.isFinite(hunterAnchor.lat) &&
+    Number.isFinite(hunterAnchor.lng)
+  ) {
+    const distFromZone = calculateHaversineMeters(
+      publicCenterLat,
+      publicCenterLng,
+      hunterAnchor.lat,
+      hunterAnchor.lng
+    );
 
-  const angle2 = (angle1 + 135 + (Math.abs(hash >>> 12) % 85)) % 360;
-  const dist2 = minOffset + (Math.abs(hash >>> 16) % span);
-  const pos2 = offsetCoordsByBearingMeters(publicCenterLat, publicCenterLng, angle2, dist2);
+    if (distFromZone >= 320) {
+      const bearingToHunter = calculateBearingDegrees(
+        publicCenterLat,
+        publicCenterLng,
+        hunterAnchor.lat,
+        hunterAnchor.lng
+      );
+      const effectiveSpan = Math.min(
+        distFromZone,
+        Math.max(1800, zoneRadiusMeters * 0.95)
+      );
+      const frac1 = 0.4 + (Math.abs(hash >>> 4) % 5) / 100; // 40% - 44%
+      const frac2 = 0.46 + (Math.abs(hash >>> 12) % 5) / 100; // 46% - 50%
+
+      const dist1 = Math.max(
+        160,
+        Math.min(zoneRadiusMeters * 0.65, effectiveSpan * frac1)
+      );
+      const dist2 = Math.max(
+        190,
+        Math.min(zoneRadiusMeters * 0.68, effectiveSpan * frac2)
+      );
+
+      const spread1 = 18 + (Math.abs(hash >>> 16) % 13); // 18°..30° left
+      const spread2 = 18 + (Math.abs(hash >>> 20) % 13); // 18°..30° right
+
+      pos1 = offsetCoordsByBearingMeters(
+        publicCenterLat,
+        publicCenterLng,
+        bearingToHunter - spread1,
+        dist1
+      );
+      pos2 = offsetCoordsByBearingMeters(
+        publicCenterLat,
+        publicCenterLng,
+        bearingToHunter + spread2,
+        dist2
+      );
+    }
+  }
+
+  if (!pos1 || !pos2) {
+    const maxOffset = Math.max(220, Math.min(620, zoneRadiusMeters * 0.62));
+    const minOffset = Math.min(
+      maxOffset - 40,
+      Math.max(180, zoneRadiusMeters * 0.28)
+    );
+    const span = Math.max(35, maxOffset - minOffset);
+
+    const angle1 = Math.abs(hash) % 360;
+    const dist1 = minOffset + (Math.abs(hash >>> 8) % span);
+    pos1 = offsetCoordsByBearingMeters(
+      publicCenterLat,
+      publicCenterLng,
+      angle1,
+      dist1
+    );
+
+    const angle2 = (angle1 + 135 + (Math.abs(hash >>> 12) % 85)) % 360;
+    const dist2 = minOffset + (Math.abs(hash >>> 16) % span);
+    pos2 = offsetCoordsByBearingMeters(
+      publicCenterLat,
+      publicCenterLng,
+      angle2,
+      dist2
+    );
+  }
 
   return [
     {
