@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import {
   AlertTriangle,
+  Award,
   Bell,
   BellRing,
   Camera,
@@ -19,9 +20,12 @@ import {
   ChevronDown,
   ChevronUp,
   Compass,
+  Copy,
+  ExternalLink,
   Flame,
   Gamepad2,
   Gift,
+  History,
   Lock,
   MapPin,
   Navigation,
@@ -30,6 +34,8 @@ import {
   Snowflake,
   Sun,
   Thermometer,
+  Ticket,
+  Trophy,
   Users,
   Volume2,
   VolumeX,
@@ -39,7 +45,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import type {
+  BrandLeaderboardResponse,
+  ClimaxLevel,
   Hunter,
+  HunterClaimSummary,
+  MissionClaim,
   PublicBrand,
   PublicMission,
   RadarClaimResponse,
@@ -48,9 +58,17 @@ import type {
   TacticalHint,
   TacticalTrend,
   ThermalState,
+  TriangulationResponse,
 } from "@/types/radar";
-import { ArcadeMap } from "@/components/radar/ArcadeMap";
-import { RadarCanvasOverlay } from "@/components/radar/RadarCanvasOverlay";
+import {
+  ArcadeMap,
+  CURRENT_MAP_THEME,
+  type ArcadeMapTheme,
+} from "@/components/radar/ArcadeMap";
+import {
+  RadarCanvasOverlay,
+  type TriangulationSectorOverlay,
+} from "@/components/radar/RadarCanvasOverlay";
 import { OnboardingModal } from "@/components/radar/OnboardingModal";
 import { QrClaimModal } from "@/components/radar/QrClaimModal";
 import { ArcadeQrScannerModal } from "@/components/radar/ArcadeQrScannerModal";
@@ -86,9 +104,18 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return outputArray;
 }
 
+function formatDurationShort(totalSeconds: number | null): string {
+  if (totalSeconds === null || !Number.isFinite(totalSeconds)) return "—";
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = Math.floor(totalSeconds % 60);
+  if (mins === 0) return `${secs}s`;
+  return `${mins}m ${String(secs).padStart(2, "0")}s`;
+}
+
 function getThermalBadgeStyle(
   state: ThermalState,
-  validationMode?: string
+  validationMode?: string,
+  climaxLevel?: ClimaxLevel | null
 ): {
   bg: string;
   border: string;
@@ -97,9 +124,19 @@ function getThermalBadgeStyle(
   subtitle: string;
 } {
   switch (state) {
-    case "QUEMANDO":
+    case "QUEMANDO": {
       let quemandoSub = "(<30M) • ¡RECLAMÁ TU PREMIO!";
-      if (validationMode === "PRESENTIAL_GPS") {
+      if (climaxLevel === 3) {
+        quemandoSub =
+          validationMode === "PRESENTIAL_GPS"
+            ? "OBJETIVO INMEDIATO • ¡ENCONTRÁ AL EQUIPO!"
+            : "OBJETIVO INMEDIATO • ¡ESCANEÁ YA!";
+      } else if (climaxLevel === 2) {
+        quemandoSub =
+          validationMode === "PRESENTIAL_GPS"
+            ? "CERCA DEL OBJETIVO • ¡SEGUÍ ASÍ!"
+            : "CERCA DEL OBJETIVO • ¡LISTO PARA SCAN!";
+      } else if (validationMode === "PRESENTIAL_GPS") {
         quemandoSub = "(<30M) • ¡ENCONTRÁ AL EQUIPO!";
       } else if (validationMode === "QR_SCAN") {
         quemandoSub = "(<30M) • ¡ESCANEÁ EL QR!";
@@ -108,9 +145,10 @@ function getThermalBadgeStyle(
         bg: "rgba(220, 38, 38, 0.95)",
         border: "#fde047",
         text: "#fef08a",
-        title: "¡QUEMANDO!",
+        title: climaxLevel === 3 ? "¡¡QUEMANDO!!" : "¡QUEMANDO!",
         subtitle: quemandoSub,
       };
+    }
     case "CALIENTE":
       return {
         bg: "rgba(234, 88, 12, 0.92)",
@@ -355,11 +393,48 @@ export function RadarGameClient({
   // Floating Climax Victory Banner state (<30m)
   const [victoryBannerDismissed, setVictoryBannerDismissed] = useState(false);
 
-  // Re-open victory banner when entering QUEMANDO
+  // Map Visual Theme (rpg-16bit daytime vs cyberpunk-dark tactical night)
+  const [mapTheme, setMapTheme] = useState<ArcadeMapTheme>(CURRENT_MAP_THEME);
+
+  // #3 Persistent Coupons Wallet ("Mis Cupones")
+  const [myClaims, setMyClaims] = useState<HunterClaimSummary[]>([]);
+  const [showCouponsModal, setShowCouponsModal] = useState(false);
+  const [copiedCouponCode, setCopiedCouponCode] = useState<string | null>(null);
+
+  // #7 Active Micro-Mechanics: Interactive Ice Shatter, Route Bonus Beacons & Triangulation Pulse
+  const [isHunterFrozen, setIsHunterFrozen] = useState(false);
+  const [iceCrackLevel, setIceCrackLevel] = useState(0);
+  const [iceShatterNonce, setIceShatterNonce] = useState(0);
+  const [bonusToastMsg, setBonusToastMsg] = useState<string | null>(null);
+  const [triangulationSector, setTriangulationSector] =
+    useState<TriangulationSectorOverlay | null>(null);
+  const [triangulateNextAtMs, setTriangulateNextAtMs] = useState(0);
+  const [triangulateCooldownSec, setTriangulateCooldownSec] = useState(0);
+  const [triangulating, setTriangulating] = useState(false);
+  const [triangulateToastMsg, setTriangulateToastMsg] = useState<string | null>(
+    null
+  );
+
+  // #8 Brand Leaderboard & Personal Hunter History
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+  const [leaderboardData, setLeaderboardData] =
+    useState<BrandLeaderboardResponse | null>(null);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardCity, setLeaderboardCity] = useState<string>("ALL");
+  const [leaderboardTab, setLeaderboardTab] = useState<"ranking" | "history">(
+    "ranking"
+  );
+
+  const prevThermalRef = useRef<ThermalState>(currentThermal);
+  // Re-open victory banner ONLY when freshly entering QUEMANDO
   useEffect(() => {
-    if (currentThermal === "QUEMANDO") {
+    if (
+      prevThermalRef.current !== "QUEMANDO" &&
+      currentThermal === "QUEMANDO"
+    ) {
       setVictoryBannerDismissed(false);
     }
+    prevThermalRef.current = currentThermal;
   }, [currentThermal]);
 
   // Presential GPS Victory Mode state (Marketing team waiting on-site)
@@ -376,6 +451,191 @@ export function RadarGameClient({
   const autoSelectedByGpsRef = useRef(false);
   const coordsRef = useRef(coords);
   coordsRef.current = coords;
+  const pingDataRef = useRef<RadarPingResponse | null>(pingData);
+  pingDataRef.current = pingData;
+  const lastPingSentAtRef = useRef(0);
+  const lastPingedCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+
+  const persistMyClaimsToStorage = useCallback(
+    (hunterId: string, claimsList: HunterClaimSummary[]) => {
+      try {
+        localStorage.setItem(
+          `rq_my_claims_${brand.slug}_${hunterId}`,
+          JSON.stringify(claimsList)
+        );
+      } catch {}
+    },
+    [brand.slug]
+  );
+
+  const recordClaimSuccess = useCallback(
+    (claim: MissionClaim, missionCtx?: PublicMission | null) => {
+      if (!hunter) return;
+      const summary: HunterClaimSummary = {
+        id: claim.id,
+        missionId: claim.missionId,
+        missionTitle: missionCtx?.title || selectedMission?.title || "Misión Radar Quest",
+        city: missionCtx?.city || selectedMission?.city || brand.cityDefault,
+        claimType: claim.claimType,
+        claimMethod: claim.claimMethod || "QR_SCAN",
+        couponCode: claim.couponCode,
+        prizeLabel: claim.prizeLabel,
+        whatsappRedeemUrl: claim.whatsappRedeemUrl,
+        proofOfHuntPassed: claim.proofOfHuntPassed,
+        claimedAt: claim.claimedAt,
+      };
+      setMyClaims((prev) => {
+        const filtered = prev.filter((c) => c.couponCode !== summary.couponCode);
+        const next = [summary, ...filtered];
+        persistMyClaimsToStorage(hunter.id, next);
+        return next;
+      });
+    },
+    [brand.cityDefault, hunter, persistMyClaimsToStorage, selectedMission]
+  );
+
+  // Sync hunter coupon wallet when authenticated (#3)
+  useEffect(() => {
+    if (!hunter) {
+      setMyClaims([]);
+      return;
+    }
+    try {
+      const cached = localStorage.getItem(
+        `rq_my_claims_${brand.slug}_${hunter.id}`
+      );
+      if (cached) {
+        const parsed = JSON.parse(cached) as HunterClaimSummary[];
+        if (Array.isArray(parsed)) setMyClaims(parsed);
+      }
+    } catch {}
+
+    let cancelled = false;
+    const params = new URLSearchParams({ brandSlug: brand.slug });
+    if (sessionToken) params.set("sessionToken", sessionToken);
+
+    fetch(`/api/radar/claims?${params.toString()}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.ok && Array.isArray(data.claims)) {
+          setMyClaims(data.claims);
+          persistMyClaimsToStorage(hunter.id, data.claims);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [brand.slug, hunter, persistMyClaimsToStorage, sessionToken]);
+
+  // Countdown tick for Triangulation Pulse cooldown & automatic 45° sector expiry (#7)
+  useEffect(() => {
+    const updateTimers = () => {
+      const now = Date.now();
+      const rem =
+        triangulateNextAtMs > now
+          ? Math.ceil((triangulateNextAtMs - now) / 1000)
+          : 0;
+      setTriangulateCooldownSec(rem);
+      setTriangulationSector((prev) =>
+        prev && now >= prev.expiresAtMs ? null : prev
+      );
+    };
+    updateTimers();
+    if (triangulateNextAtMs <= Date.now() && !triangulationSector) return;
+    const t = window.setInterval(updateTimers, 500);
+    return () => window.clearInterval(t);
+  }, [triangulateNextAtMs, triangulationSector]);
+
+  // Interactive Ice Shatter tap handler (#7)
+  const handleTapFrozenHunter = useCallback(() => {
+    if (!isHunterFrozen) return;
+    if (iceCrackLevel >= 2) {
+      setIceCrackLevel(0);
+      setIceShatterNonce((n) => n + 1);
+      setIsHunterFrozen(false);
+      arcadeHardware.playIceBreakSound(true);
+    } else {
+      setIceCrackLevel((c) => c + 1);
+      arcadeHardware.playIceBreakSound(false);
+    }
+  }, [iceCrackLevel, isHunterFrozen]);
+
+  // Load Brand Leaderboard & Personal History (#8)
+  const fetchLeaderboard = useCallback(
+    async (cityVal: string) => {
+      setLeaderboardLoading(true);
+      try {
+        const params = new URLSearchParams({ brandSlug: brand.slug });
+        if (cityVal && cityVal !== "ALL") params.set("city", cityVal);
+        if (sessionToken) params.set("sessionToken", sessionToken);
+        const res = await fetch(`/api/radar/leaderboard?${params.toString()}`);
+        const data = (await res.json()) as BrandLeaderboardResponse;
+        if (data?.ok) {
+          setLeaderboardData(data);
+        }
+      } catch {
+        // Ignore network hiccup
+      } finally {
+        setLeaderboardLoading(false);
+      }
+    },
+    [brand.slug, sessionToken]
+  );
+
+  const openLeaderboardModal = useCallback(() => {
+    setShowLeaderboardModal(true);
+    fetchLeaderboard(leaderboardCity);
+  }, [fetchLeaderboard, leaderboardCity]);
+
+  // Active Triangulation Pulse Trigger (#7)
+  const triggerTriangulationPulse = useCallback(async () => {
+    if (!hunter || !selectedMission || triangulating) return;
+    setTriangulating(true);
+    setTriangulateToastMsg(null);
+    try {
+      const res = await fetch("/api/radar/triangulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          missionId: selectedMission.id,
+          brandSlug: brand.slug,
+          lat: coordsRef.current.lat,
+          lng: coordsRef.current.lng,
+          sessionToken,
+        }),
+      });
+      const data = (await res.json()) as TriangulationResponse;
+      if (data.nextAvailableAtMs) {
+        setTriangulateNextAtMs(data.nextAvailableAtMs);
+      }
+      if (
+        data.ok &&
+        typeof data.centerBearingDeg === "number" &&
+        data.sectorCode &&
+        data.sectorLabel &&
+        data.expiresAtMs
+      ) {
+        arcadeHardware.playTriangulationSweepSound();
+        setTriangulationSector({
+          sectorCode: data.sectorCode,
+          sectorLabel: data.sectorLabel,
+          centerBearingDeg: data.centerBearingDeg,
+          expiresAtMs: data.expiresAtMs,
+        });
+      }
+      if (data.message) {
+        setTriangulateToastMsg(data.message);
+        window.setTimeout(() => setTriangulateToastMsg(null), 4500);
+      }
+    } catch {
+      setTriangulateToastMsg("No se pudo emitir el pulso de triangulación.");
+      window.setTimeout(() => setTriangulateToastMsg(null), 3500);
+    } finally {
+      setTriangulating(false);
+    }
+  }, [brand.slug, hunter, selectedMission, sessionToken, triangulating]);
 
   // Detect cached GPS coords post-hydration and auto-select nearest active mission if unpinned
   useEffect(() => {
@@ -659,15 +919,35 @@ export function RadarGameClient({
         }
 
         const data = (await res.json()) as RadarPingResponse;
+        lastPingSentAtRef.current = Date.now();
+        lastPingedCoordsRef.current = {
+          lat: targetCoords.lat,
+          lng: targetCoords.lng,
+        };
         if (data.ok) {
           if (data.tacticalStateSnapshot) {
             tacticalSnapshotRef.current = data.tacticalStateSnapshot;
           }
           setPingData(data);
+
+          if (data.newlyCollectedBonusNodeId) {
+            arcadeHardware.playBonusBeaconPickupSound();
+            if (data.triangulationCooldownBoostMs) {
+              const boost = data.triangulationCooldownBoostMs;
+              setTriangulateNextAtMs((prev) =>
+                prev > Date.now() ? Math.max(Date.now(), prev - boost) : prev
+              );
+            }
+            setBonusToastMsg(
+              "¡BALIZA ACTIVADA! +1 Rastreo Verificado y -15s de recarga de Pulso."
+            );
+            window.setTimeout(() => setBonusToastMsg(null), 4800);
+          }
+
           if (data.dangerAlert?.active) {
             arcadeHardware.playRivalDangerSiren();
           } else {
-            arcadeHardware.triggerThermalFeedback(data.thermalState);
+            arcadeHardware.triggerSmartThermalFeedback(data.thermalState);
           }
 
           if (data.missionStatus === "CAPTURED") {
@@ -691,10 +971,38 @@ export function RadarGameClient({
     [hunter, selectedMission, brand.slug, sessionToken]
   );
 
-  // 5. Real High-Accuracy Geolocation Watcher + 4s Heartbeat Ping
+  // 5. Real High-Accuracy Geolocation Watcher + Adaptive Thermal Polling Scheduler (#4)
   useEffect(() => {
     if (!hunter || !selectedMission || gpsMode !== "real") return;
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
+
+    let active = true;
+    let pollTimer: number | null = null;
+
+    const getAdaptiveIntervalMs = (): number => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return 30_000;
+      }
+      const p = pingDataRef.current;
+      const thermal = p?.thermalState || "FUERA DE ZONA";
+      const speed = p?.speedKmh ?? 0;
+      if (thermal === "QUEMANDO" || thermal === "CALIENTE") return 4_000;
+      if (p?.inVehicleMode) return 6_000;
+      if (thermal === "TIBIO" && speed >= 1.2) return 5_000;
+      if (thermal === "CONGELADO" && speed >= 1.2) return 7_000;
+      if (thermal === "FUERA DE ZONA") return 15_000;
+      return 12_000;
+    };
+
+    const scheduleNextPing = () => {
+      if (!active) return;
+      if (pollTimer !== null) window.clearTimeout(pollTimer);
+      pollTimer = window.setTimeout(async () => {
+        if (!active) return;
+        await sendRadarPing(coordsRef.current);
+        scheduleNextPing();
+      }, getAdaptiveIntervalMs());
+    };
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
@@ -717,6 +1025,15 @@ export function RadarGameClient({
         setHasLiveGpsFix(true);
         setCoordsOrigin("live");
         setCoords(next);
+
+        const prevPinged = lastPingedCoordsRef.current;
+        const elapsedSincePing = Date.now() - lastPingSentAtRef.current;
+        const movedMeters = prevPinged
+          ? calculateHaversineMeters(prevPinged.lat, prevPinged.lng, next.lat, next.lng)
+          : 999;
+        if (movedMeters >= 6 && elapsedSincePing >= 2500) {
+          sendRadarPing(next).then(scheduleNextPing);
+        }
       },
       () => {},
       {
@@ -726,14 +1043,22 @@ export function RadarGameClient({
       }
     );
 
-    sendRadarPing(coordsRef.current);
-    const interval = window.setInterval(() => {
-      sendRadarPing(coordsRef.current);
-    }, 4000);
+    const onVisibilityWake = () => {
+      if (document.visibilityState === "visible") {
+        sendRadarPing(coordsRef.current).then(scheduleNextPing);
+      } else {
+        scheduleNextPing();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityWake);
+
+    sendRadarPing(coordsRef.current).then(scheduleNextPing);
 
     return () => {
+      active = false;
       navigator.geolocation.clearWatch(watchId);
-      window.clearInterval(interval);
+      if (pollTimer !== null) window.clearTimeout(pollTimer);
+      document.removeEventListener("visibilitychange", onVisibilityWake);
     };
   }, [hunter, selectedMission, gpsMode, sendRadarPing]);
 
@@ -809,7 +1134,8 @@ export function RadarGameClient({
     selectedMission?.validationMode || pingData?.validationMode || "HYBRID";
   const thermalStyle = getThermalBadgeStyle(
     currentThermal,
-    missionValidationMode
+    missionValidationMode,
+    pingData?.climaxLevel ?? null
   );
 
   const hasKnownPlayerCoords = coordsOrigin !== "fallback";
@@ -904,17 +1230,22 @@ export function RadarGameClient({
       const data = (await res.json()) as RadarClaimResponse;
       if (data.ok) {
         arcadeHardware.playVictoryFanfare();
-        setMissions((prev) =>
-          prev.map((m) =>
-            m.id === selectedMission.id
-              ? {
-                  ...m,
-                  status: "CAPTURED",
-                  winnerAlias: hunter.alias,
-                }
-              : m
-          )
-        );
+        if (data.claim) {
+          recordClaimSuccess(data.claim, selectedMission);
+        }
+        if (data.claim?.claimType === "MAJOR_PRIZE") {
+          setMissions((prev) =>
+            prev.map((m) =>
+              m.id === selectedMission.id
+                ? {
+                    ...m,
+                    status: "CAPTURED",
+                    winnerAlias: hunter.alias,
+                  }
+                : m
+            )
+          );
+        }
       }
       setPresentialClaimResult(data);
       setShowPresentialModal(true);
@@ -942,7 +1273,9 @@ export function RadarGameClient({
     >
       {/* 9:16 VERTICAL ARCADE MOBILE VIEWPORT (Logical 360x640 -> 1080x1920) */}
       <main
-        className="relative w-full h-[100dvh] md:w-[420px] md:h-[min(94dvh,860px)] md:rounded-2xl md:border-4 overflow-hidden flex flex-col bg-[#140b29] shadow-[0_0_50px_rgba(168,85,247,0.3)]"
+        className={`relative w-full h-[100dvh] md:w-[420px] md:h-[min(94dvh,860px)] md:rounded-2xl md:border-4 overflow-hidden flex flex-col bg-[#140b29] shadow-[0_0_50px_rgba(168,85,247,0.3)] ${
+          mapTheme === "rpg-16bit" ? "rf-hud-day" : ""
+        }`}
         style={{ borderColor: brand.primaryColor }}
       >
         <div className="relative flex-1 w-full h-full">
@@ -953,6 +1286,9 @@ export function RadarGameClient({
             primaryColor={brand.primaryColor}
             secondaryColor={brand.secondaryColor}
             mode="player"
+            theme={mapTheme}
+            onThemeChange={setMapTheme}
+            bonusBeacons={pingData?.bonusNodes || []}
             onCanvasReady={(c) => {
               mapCanvasRef.current = c;
             }}
@@ -960,6 +1296,7 @@ export function RadarGameClient({
 
           <RadarCanvasOverlay
             thermalState={currentThermal}
+            climaxLevel={pingData?.climaxLevel ?? null}
             inVehicleMode={Boolean(pingData?.inVehicleMode)}
             dangerAlertActive={Boolean(pingData?.dangerAlert?.active)}
             speedKmh={pingData?.speedKmh ?? 0}
@@ -967,8 +1304,25 @@ export function RadarGameClient({
             primaryColor={brand.primaryColor}
             secondaryColor={brand.secondaryColor}
             active={preloaderDismissed}
+            triangulationSector={triangulationSector}
+            iceCrackLevel={iceCrackLevel}
+            iceShatterNonce={iceShatterNonce}
+            onFrozenStateChange={(frozen) => {
+              setIsHunterFrozen(frozen);
+              if (!frozen) setIceCrackLevel(0);
+            }}
             onCanvasReady={handleOverlayCanvasReady}
           />
+
+          {/* Interactive ice shatter tap target over frozen sprite (#7) */}
+          {isHunterFrozen && (
+            <button
+              type="button"
+              onClick={handleTapFrozenHunter}
+              aria-label="Tocar para romper hielo"
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 z-20 cursor-pointer bg-transparent"
+            />
+          )}
 
           <div className="crt-scanlines pointer-events-none absolute inset-0 z-10 opacity-18" />
 
@@ -1021,11 +1375,42 @@ export function RadarGameClient({
               </div>
 
               {/* Right: Retrofuturistic Micro-Buttons */}
-              <div className="flex items-center gap-1.5 shrink-0 z-10">
-                <div className="px-2 py-1 rf-nameplate text-[10px] text-cyan-300 font-bold border-cyan-500/50 flex items-center gap-1">
+              <div className="flex items-center gap-1 shrink-0 z-10">
+                <div className="px-1.5 py-1 rf-nameplate text-[10px] text-cyan-300 font-bold border-cyan-500/50 flex items-center gap-1">
                   <Users className="w-3 h-3 text-cyan-400" />
                   <span>{pingData?.activeHuntersCount ?? 1}</span>
                 </div>
+
+                {hunter && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCouponsModal(true)}
+                    className={`relative p-1.5 rf-btn-steel text-xs ${
+                      myClaims.length > 0
+                        ? "border-amber-400 text-amber-300"
+                        : "text-slate-300"
+                    }`}
+                    title="Mis Cupones Ganados"
+                    aria-label="Ver mis cupones"
+                  >
+                    <Ticket className="w-3.5 h-3.5" />
+                    {myClaims.length > 0 && (
+                      <span className="absolute -top-1 -right-1 px-1 min-w-[14px] h-[14px] rounded-full bg-amber-400 text-slate-950 font-black text-[8px] flex items-center justify-center leading-none border border-slate-900">
+                        {myClaims.length}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={openLeaderboardModal}
+                  className="p-1.5 rf-btn-steel text-xs text-amber-300"
+                  title="Ranking e Historial"
+                  aria-label="Abrir ranking e historial"
+                >
+                  <Trophy className="w-3.5 h-3.5" />
+                </button>
 
                 <button
                   type="button"
@@ -1265,10 +1650,42 @@ export function RadarGameClient({
                   <span>{pingData.anomalyMessage}</span>
                 </div>
               )}
+
+            {triangulateToastMsg && (
+              <div className="px-2.5 py-1.5 rounded bg-cyan-950/95 border border-cyan-400 text-cyan-100 text-[11px] font-bold flex items-center gap-2 shadow-lg">
+                <Radio className="w-3.5 h-3.5 shrink-0 text-cyan-300 animate-pulse" />
+                <span>{triangulateToastMsg}</span>
+              </div>
+            )}
+
+            {bonusToastMsg && (
+              <div className="px-2.5 py-1.5 rounded bg-emerald-950/95 border border-emerald-400 text-emerald-100 text-[11px] font-bold flex items-center gap-2 shadow-lg">
+                <Sparkles className="w-3.5 h-3.5 shrink-0 text-amber-300" />
+                <span>{bonusToastMsg}</span>
+              </div>
+            )}
+
+            {currentThermal === "QUEMANDO" &&
+              victoryBannerDismissed &&
+              !showInAppScanner &&
+              !showPresentialModal && (
+                <button
+                  type="button"
+                  onClick={() => setVictoryBannerDismissed(false)}
+                  className="w-full px-2.5 py-1.5 rf-btn-gold text-[11px] flex items-center justify-center gap-1.5 shadow-lg"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>¡COFRE AL ALCANCE (&lt;30M)! VER OPCIONES DE CAPTURA</span>
+                </button>
+              )}
           </header>
 
           {/* BOTTOM ARCADE CONTROLS */}
-          <footer className="absolute bottom-0 inset-x-0 z-20 p-2.5 space-y-2 bg-gradient-to-t from-[#090314] via-[#0d061f]/95 to-transparent">
+          <footer
+            className={`absolute bottom-0 inset-x-0 z-20 p-2.5 space-y-2 ${
+              mapTheme === "rpg-16bit" ? "rf-footer-day" : "rf-footer-night"
+            }`}
+          >
             {selectedMission && (
               <div className="p-2.5 rf-panel rf-panel-gold relative overflow-hidden space-y-1.5 shadow-xl">
                 {/* Top-Right Hazard Caution Tab */}
@@ -1281,7 +1698,46 @@ export function RadarGameClient({
                       {selectedMission.prizeTitle}
                     </span>
                   </span>
+                  {pingData?.proofOfHuntProgress && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded border text-[9px] font-mono font-bold shrink-0 ${
+                        pingData.proofOfHuntProgress.ready
+                          ? "bg-emerald-950/80 border-emerald-400 text-emerald-300"
+                          : "bg-slate-900/90 border-cyan-500/40 text-cyan-200"
+                      }`}
+                      title="Pulsos válidos de rastreo requeridos para optar por el Premio Mayor"
+                    >
+                      RASTREO {pingData.proofOfHuntProgress.currentValidPings}/
+                      {pingData.proofOfHuntProgress.requiredPings}
+                    </span>
+                  )}
                 </div>
+
+                {pingData?.proofOfHuntProgress && (
+                  <div className="w-full h-1.5 rounded-full bg-slate-900/90 overflow-hidden border border-slate-700/70">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        pingData.proofOfHuntProgress.ready
+                          ? "bg-emerald-400"
+                          : "bg-cyan-400"
+                      }`}
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.round(
+                            (pingData.proofOfHuntProgress.currentValidPings /
+                              Math.max(
+                                1,
+                                pingData.proofOfHuntProgress.requiredPings
+                              )) *
+                              100
+                          )
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                )}
+
                 <p className="text-[11px] text-slate-300 leading-snug">
                   <strong className="text-cyan-300">Pista:</strong>{" "}
                   {selectedMission.zoneHint
@@ -1381,18 +1837,45 @@ export function RadarGameClient({
             )}
 
             {/* Action Buttons Row */}
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-1.5">
               <ViralRecorder
                 brand={brand}
                 mission={selectedMission}
                 hunterAlias={hunter?.alias || "@cazador"}
                 thermalState={currentThermal}
                 activeHunters={pingData?.activeHuntersCount ?? 1}
+                tacticalHintMessage={pingData?.tacticalHint?.message || null}
+                proofOfHuntProgress={pingData?.proofOfHuntProgress || null}
                 getMapCanvas={() => mapCanvasRef.current}
                 getOverlayCanvas={() => overlayCanvasRef.current}
               />
 
               <div className="flex items-center gap-1.5">
+                {hunter && selectedMission && (
+                  <button
+                    type="button"
+                    onClick={triggerTriangulationPulse}
+                    disabled={triangulating || triangulateCooldownSec > 0}
+                    title="Emitir Pulso de Triangulación (barre un sector de 45°)"
+                    className={`px-2.5 py-2 text-[10px] leading-none flex items-center gap-1 ${
+                      triangulateCooldownSec > 0 || triangulating
+                        ? "rf-btn-steel opacity-75 cursor-not-allowed"
+                        : "rf-btn-cyan"
+                    }`}
+                  >
+                    <Radio
+                      className={`w-3.5 h-3.5 ${
+                        triangulating ? "animate-ping" : ""
+                      }`}
+                    />
+                    <span>
+                      {triangulateCooldownSec > 0
+                        ? `PULSO ${triangulateCooldownSec}S`
+                        : "PULSO"}
+                    </span>
+                  </button>
+                )}
+
                 {(process.env.NODE_ENV !== "production" ||
                   (typeof window !== "undefined" &&
                     window.location.search.includes("debug=1"))) && (
@@ -1458,23 +1941,30 @@ export function RadarGameClient({
             </div>
           </footer>
 
-          {/* CLIMAX VICTORY FLOATING MODAL (<30m) */}
+          {/* CLIMAX VICTORY FLOATING MODAL (<30m) - Non-blocking dismissable */}
           {currentThermal === "QUEMANDO" &&
             (selectedMission?.status === "ACTIVE" || selectedMission?.status === "CAPTURED") &&
             !victoryBannerDismissed &&
             !showInAppScanner &&
             !showPresentialModal &&
             !showExternalClaimModal && (
-              <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-300">
-                <div className="relative w-full max-w-xs sm:max-w-sm p-5 rf-victory-banner-frame text-center space-y-4">
-                  {/* Close / Dismiss button */}
+              <div
+                onClick={() => setVictoryBannerDismissed(true)}
+                className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs animate-in fade-in duration-300"
+              >
+                <div
+                  onClick={(ev) => ev.stopPropagation()}
+                  className="relative w-full max-w-xs sm:max-w-sm p-5 rf-victory-banner-frame text-center space-y-3.5"
+                >
+                  {/* Close / Dismiss to see Radar button */}
                   <button
                     type="button"
                     onClick={() => setVictoryBannerDismissed(true)}
-                    className="absolute top-2.5 right-2.5 p-1.5 text-slate-400 hover:text-white rounded-lg bg-black/50 hover:bg-black/80 transition"
-                    aria-label="Cerrar modal de victoria"
+                    className="absolute top-2.5 right-2.5 px-2 py-1 text-[10px] font-bold text-cyan-200 hover:text-white rounded-lg bg-black/65 border border-cyan-500/40 hover:bg-black/90 transition flex items-center gap-1 cursor-pointer"
+                    aria-label="Minimizar al radar"
                   >
-                    <X className="w-4 h-4" />
+                    <span>Ver Radar</span>
+                    <X className="w-3.5 h-3.5" />
                   </button>
 
                   {/* 16-bit Victory Chest Sprite from PixelLab */}
@@ -1510,18 +2000,39 @@ export function RadarGameClient({
                       <>
                         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 font-pixel text-[11px] animate-pulse">
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>¡ESTÁS QUEMANDO!</span>
+                          <span>
+                            {pingData?.climaxLevel === 3
+                              ? "¡ENCIMA DEL OBJETIVO! (<10M)"
+                              : pingData?.climaxLevel === 2
+                              ? "¡A POCOS PASOS! (<20M)"
+                              : "¡ESTÁS QUEMANDO! (<30M)"}
+                          </span>
                         </div>
                         <h2 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-200 to-pink-400 font-pixel tracking-wide">
                           ¡LLEGASTE AL TESORO!
                         </h2>
                         <p className="text-xs text-slate-200 leading-snug">
-                          Estás a menos de <strong>30 metros</strong> del premio secreto.
-                          ¡Realiza la captura ahora antes de que otro cazador lo reclame!
+                          Estás dentro del radio de captura secreto.
+                          ¡Realizá la captura ahora antes de que otro cazador lo reclame!
                         </p>
                       </>
                     )}
                   </div>
+
+                  {/* Proof of Hunt Readiness Pill inside Climax */}
+                  {pingData?.proofOfHuntProgress && selectedMission?.status === "ACTIVE" && (
+                    <div
+                      className={`px-3 py-1.5 rounded-lg border text-[11px] font-mono ${
+                        pingData.proofOfHuntProgress.ready
+                          ? "bg-emerald-950/75 border-emerald-400/70 text-emerald-200"
+                          : "bg-amber-950/75 border-amber-400/70 text-amber-200"
+                      }`}
+                    >
+                      {pingData.proofOfHuntProgress.ready
+                        ? `RASTREO VERIFICADO (${pingData.proofOfHuntProgress.currentValidPings}/${pingData.proofOfHuntProgress.requiredPings}): APTO PREMIO MAYOR`
+                        : `RASTREO ${pingData.proofOfHuntProgress.currentValidPings}/${pingData.proofOfHuntProgress.requiredPings}: necesitás ${pingData.proofOfHuntProgress.requiredPings} pulsos en zona para el Premio Mayor.`}
+                    </div>
+                  )}
 
                   {/* Primary Action Button (Single-Tap Victory Claim) */}
                   <div className="space-y-2 pt-1">
@@ -1566,15 +2077,313 @@ export function RadarGameClient({
 
                     <p className="text-[10px] text-slate-400 font-mono">
                       {missionValidationMode === "QR_SCAN"
-                        ? "Enfoca la cámara hacia el cartel o sticker oficial de la marca."
+                        ? "Enfocá la cámara hacia el cartel o sticker oficial de la marca."
                         : missionValidationMode === "PRESENTIAL_GPS"
                         ? "El equipo de la marca te entregará el premio en el punto."
-                        : "Puedes escanear el QR o registrar tu llegada directa."}
+                        : "Podés escanear el QR o registrar tu llegada directa."}
                     </p>
                   </div>
                 </div>
               </div>
             )}
+
+          {/* PERSISTENT HUNTER COUPONS WALLET MODAL (#3) */}
+          {showCouponsModal && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3">
+              <div className="w-full max-w-sm max-h-[82dvh] flex flex-col rf-panel rf-panel-gold p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-amber-500/30 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Ticket className="w-4 h-4 text-amber-300" />
+                    <h2 className="font-handjet font-black text-lg uppercase tracking-wider text-white">
+                      MIS CUPONES • {brand.name}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowCouponsModal(false)}
+                    className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                    aria-label="Cerrar cupones"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5">
+                  {myClaims.length === 0 ? (
+                    <div className="py-8 text-center space-y-2 text-slate-300 text-xs">
+                      <Gift className="w-8 h-8 mx-auto text-slate-500" />
+                      <p className="font-bold">Todavía no ganaste cupones en esta marca.</p>
+                      <p className="text-[11px] text-slate-400">
+                        Llegá a &lt;30m de un Drop y escaneá el QR o validá tu llegada para guardar tu cupón aquí.
+                      </p>
+                    </div>
+                  ) : (
+                    myClaims.map((claim) => {
+                      const isMajor = claim.claimType === "MAJOR_PRIZE";
+                      const copied = copiedCouponCode === claim.couponCode;
+                      return (
+                        <div
+                          key={claim.id}
+                          className={`p-3 rounded-lg border space-y-2 ${
+                            isMajor
+                              ? "bg-amber-950/45 border-amber-400/70"
+                              : "bg-slate-900/90 border-cyan-500/40"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <span
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
+                                  isMajor
+                                    ? "bg-amber-400 text-slate-950"
+                                    : "bg-cyan-500/20 text-cyan-300 border border-cyan-400/50"
+                                }`}
+                              >
+                                <Award className="w-2.5 h-2.5" />
+                                {isMajor ? "PREMIO MAYOR" : "CUPÓN CONSUELO"}
+                              </span>
+                              <p className="font-handjet font-bold text-sm text-white mt-1 truncate">
+                                {claim.prizeLabel}
+                              </p>
+                              <p className="text-[10px] text-slate-400 truncate">
+                                {claim.missionTitle} • {claim.city}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded bg-black/50 border border-dashed border-amber-400/60">
+                            <span className="font-mono font-black text-sm tracking-widest text-amber-300 select-all">
+                              {claim.couponCode}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(claim.couponCode).catch(() => {});
+                                setCopiedCouponCode(claim.couponCode);
+                                window.setTimeout(() => setCopiedCouponCode(null), 2000);
+                              }}
+                              className="px-2 py-1 rf-btn-steel text-[9px] flex items-center gap-1"
+                            >
+                              {copied ? (
+                                <Check className="w-3 h-3 text-emerald-300" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                              <span>{copied ? "COPIADO" : "COPIAR"}</span>
+                            </button>
+                          </div>
+
+                          <a
+                            href={claim.whatsappRedeemUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-full py-2 px-3 rf-btn-emerald text-[11px] flex items-center justify-center gap-1.5"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>CANJEAR EN WHATSAPP DE LA MARCA</span>
+                          </a>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* BRAND LEADERBOARD & HUNTER PERSONAL HISTORY MODAL (#8) */}
+          {showLeaderboardModal && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3">
+              <div className="w-full max-w-sm max-h-[84dvh] flex flex-col rf-panel rf-panel-cyan p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-cyan-500/30 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-amber-300" />
+                    <h2 className="font-handjet font-black text-lg uppercase tracking-wider text-white">
+                      SALÓN DE CAZADORES
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLeaderboardModal(false)}
+                    className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                    aria-label="Cerrar ranking"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Tab switcher & City Filter */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setLeaderboardTab("ranking")}
+                      className={`px-2.5 py-1 text-[10px] flex items-center gap-1 ${
+                        leaderboardTab === "ranking"
+                          ? "rf-btn-cyan"
+                          : "rf-btn-steel opacity-75"
+                      }`}
+                    >
+                      <Trophy className="w-3 h-3" />
+                      <span>RANKING</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLeaderboardTab("history")}
+                      className={`px-2.5 py-1 text-[10px] flex items-center gap-1 ${
+                        leaderboardTab === "history"
+                          ? "rf-btn-gold"
+                          : "rf-btn-steel opacity-75"
+                      }`}
+                    >
+                      <History className="w-3 h-3" />
+                      <span>MI HISTORIAL</span>
+                    </button>
+                  </div>
+
+                  {leaderboardTab === "ranking" && leaderboardData?.cities && (
+                    <select
+                      value={leaderboardCity}
+                      onChange={(e) => {
+                        const nextCity = e.target.value;
+                        setLeaderboardCity(nextCity);
+                        fetchLeaderboard(nextCity);
+                      }}
+                      className="px-2 py-1 rounded bg-slate-900 border border-cyan-500/50 text-[10px] font-bold text-cyan-200 max-w-[120px]"
+                      aria-label="Filtrar ranking por ciudad"
+                    >
+                      <option value="ALL">Todas las ciudades</option>
+                      {leaderboardData.cities.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                  {leaderboardLoading ? (
+                    <p className="py-8 text-center text-xs text-cyan-300 animate-pulse font-mono">
+                      CARGANDO TELEMETRÍA GLOBAL...
+                    </p>
+                  ) : leaderboardTab === "ranking" ? (
+                    !leaderboardData?.leaderboard?.length ? (
+                      <div className="py-8 text-center space-y-2 text-xs text-slate-400">
+                        <Trophy className="w-8 h-8 mx-auto text-slate-600" />
+                        <p>Aún no hay capturas registradas para este filtro.</p>
+                      </div>
+                    ) : (
+                      leaderboardData.leaderboard.map((entry) => {
+                        const isMe = hunter?.id === entry.hunterId;
+                        return (
+                          <div
+                            key={entry.hunterId}
+                            className={`px-2.5 py-2 rounded-lg border flex items-center justify-between gap-2 ${
+                              isMe
+                                ? "bg-cyan-950/60 border-cyan-400"
+                                : entry.rank <= 3
+                                ? "bg-amber-950/35 border-amber-400/50"
+                                : "bg-slate-900/85 border-slate-700/70"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span
+                                className={`w-6 h-6 rounded flex items-center justify-center text-[11px] font-black shrink-0 ${
+                                  entry.rank === 1
+                                    ? "bg-amber-400 text-slate-950"
+                                    : entry.rank === 2
+                                    ? "bg-slate-300 text-slate-950"
+                                    : entry.rank === 3
+                                    ? "bg-amber-700 text-white"
+                                    : "bg-slate-800 text-slate-300"
+                                }`}
+                              >
+                                {entry.rank}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-xs font-extrabold text-white truncate">
+                                  {entry.alias} {isMe && <span className="text-cyan-300">(TÚ)</span>}
+                                </p>
+                                <p className="text-[10px] text-slate-400 truncate">
+                                  {entry.majorPrizesCount > 0
+                                    ? `${entry.majorPrizesCount} tesoro${entry.majorPrizesCount > 1 ? "s" : ""}`
+                                    : `${entry.capturesCount} captura${entry.capturesCount !== 1 ? "s" : ""}`}
+                                  {entry.fastestCaptureSeconds !== null &&
+                                    ` • Récord ${formatDurationShort(entry.fastestCaptureSeconds)}`}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="px-2 py-0.5 rounded bg-black/50 border border-cyan-500/40 font-mono text-[10px] font-bold text-amber-300 shrink-0">
+                              {entry.score} PTS
+                            </span>
+                          </div>
+                        );
+                      })
+                    )
+                  ) : !leaderboardData?.myStats ? (
+                    <div className="py-8 text-center space-y-2 text-xs text-slate-400">
+                      <MapPin className="w-8 h-8 mx-auto text-slate-600" />
+                      <p>Caminá y enviá pulsos en tu misión para construir tu historial de cazador.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2 text-center">
+                        <div className="p-2 rounded bg-slate-900/90 border border-cyan-500/30">
+                          <p className="text-[9px] text-slate-400 uppercase">Posición Global</p>
+                          <p className="font-handjet font-black text-lg text-amber-300">
+                            {leaderboardData.myStats.rank ? `#${leaderboardData.myStats.rank}` : "—"}
+                          </p>
+                        </div>
+                        <div className="p-2 rounded bg-slate-900/90 border border-cyan-500/30">
+                          <p className="text-[9px] text-slate-400 uppercase">Pulsos Válidos</p>
+                          <p className="font-handjet font-black text-lg text-cyan-300">
+                            {leaderboardData.myStats.totalValidPings}
+                          </p>
+                        </div>
+                        <div className="p-2 rounded bg-slate-900/90 border border-cyan-500/30">
+                          <p className="text-[9px] text-slate-400 uppercase">Capturas</p>
+                          <p className="font-handjet font-black text-lg text-emerald-300">
+                            {leaderboardData.myStats.capturesCount}
+                          </p>
+                        </div>
+                        <div className="p-2 rounded bg-slate-900/90 border border-cyan-500/30">
+                          <p className="text-[9px] text-slate-400 uppercase">Menor Tiempo</p>
+                          <p className="font-handjet font-black text-lg text-white">
+                            {formatDurationShort(leaderboardData.myStats.fastestCaptureSeconds)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {leaderboardData.myStats.claims.length > 0 && (
+                        <div className="space-y-1.5">
+                          <p className="text-[10px] font-bold uppercase text-cyan-300">
+                            Historial de Premios
+                          </p>
+                          {leaderboardData.myStats.claims.map((c) => (
+                            <div
+                              key={c.id}
+                              className="px-2.5 py-2 rounded bg-slate-900/90 border border-slate-700 text-xs flex items-center justify-between gap-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="font-bold text-white truncate">{c.prizeLabel}</p>
+                                <p className="text-[10px] text-slate-400 truncate">
+                                  {c.missionTitle} ({c.city})
+                                </p>
+                              </div>
+                              <span className="font-mono text-[10px] text-amber-300 shrink-0">
+                                {c.couponCode}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 3-SECOND ARCADE ONBOARDING GATE */}
           {!checkingSession && !hunter && (
@@ -1599,6 +2408,9 @@ export function RadarGameClient({
               demoTokenHint={demoQrHint}
               onClose={() => setShowInAppScanner(false)}
               onClaimSuccess={(res) => {
+                if (res.claim) {
+                  recordClaimSuccess(res.claim, selectedMission);
+                }
                 if (res.claim?.claimType === "MAJOR_PRIZE" && selectedMission) {
                   setMissions((prev) =>
                     prev.map((m) =>
@@ -1626,6 +2438,11 @@ export function RadarGameClient({
               gpsMode={gpsMode}
               hasLiveGpsFix={hasLiveGpsFix}
               initialResult={presentialClaimResult}
+              onClaimSuccess={(res) => {
+                if (res.claim) {
+                  recordClaimSuccess(res.claim, selectedMission);
+                }
+              }}
               onClose={() => setShowPresentialModal(false)}
             />
           )}
@@ -1640,6 +2457,11 @@ export function RadarGameClient({
               gpsMode={gpsMode}
               hasLiveGpsFix={hasLiveGpsFix}
               suggestedCode={demoQrHint}
+              onClaimSuccess={(res) => {
+                if (res.claim) {
+                  recordClaimSuccess(res.claim, selectedMission);
+                }
+              }}
               onClose={() => setShowExternalClaimModal(false)}
             />
           )}

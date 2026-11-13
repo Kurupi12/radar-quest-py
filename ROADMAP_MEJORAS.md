@@ -14,35 +14,35 @@ Documento vivo de seguimiento técnico y de jugabilidad para implementar mejoras
 - [x] **2. Selector de misiones por cercanía/ciudad en el HUD del jugador** *(Completado)*
   - Conectar `setSelectedMissionId` en `RadarGameClient.tsx` mediante un selector compacto en el HUD superior/tarjeta de misión para alternar entre misiones activas de una misma marca, preseleccionando automáticamente la misión más cercana al GPS o mostrando macro-distancia/ciudad cuando está `FUERA DE ZONA`.
 
-- [ ] **3. Indicador visible de `Proof of Hunt` (`validHuntPings / requiredPings`) y acceso a "Mi Cupón"**
-  - Mostrar en el HUD el progreso de rastreo válido requerido para desbloquear el Premio Mayor (ej. `Rastreo 2/3`) evitando confusiones con `CONSOLATION_CURIOUS`, y ofrecer acceso persistente a los cupones ganados durante la sesión aunque el usuario cierre el modal de victoria.
+- [x] **3. Indicador visible de `Proof of Hunt` (`validHuntPings / requiredPings`) y acceso a "Mi Cupón"** *(Completado)*
+  - Mostrar en el HUD el progreso de rastreo válido requerido para desbloquear el Premio Mayor (ej. `Rastreo 2/3`) evitando confusiones con `CONSOLATION_CURIOUS`, y ofrecer acceso persistente a los cupones ganados durante la sesión (`GET /api/radar/claims` + botón `"Mis Cupones"` + sincronización `localStorage`) aunque el usuario cierre el modal de victoria.
 
 ---
 
 ## Prioridad Alta (Mejora directa de la experiencia en la calle)
 
-- [ ] **4. Polling adaptativo inteligente y feedback sonoro por cambio de estado**
-  - Espaciar dinámicamente los pings en `RadarGameClient.tsx` según desplazamiento y estado (`~4 s` caminando activo, `12–15 s` detenido o en `FUERA DE ZONA`) para ahorrar batería, reducir tráfico serverless y evitar saturar `HunterPing` / Heatmap.
-  - Disparar el tono chiptune de `triggerThermalFeedback` principalmente ante transiciones de estado térmico/táctico o intervalos espaciados para evitar fatiga auditiva en caminatas largas.
+- [x] **4. Polling adaptativo inteligente y feedback sonoro por cambio de estado** *(Completado)*
+  - Espaciar dinámicamente los pings en `RadarGameClient.tsx` según desplazamiento y estado (`4 s` en `CALIENTE`/`QUEMANDO`, `5 s` caminando en `TIBIO`, `7 s` caminando en `CONGELADO`, `12 s` detenido, `15 s` en `FUERA DE ZONA` y `30 s` en pestaña oculta con ping inmediato al moverse `>= 6 m` o volver al foco).
+  - Disparar el tono chiptune de `triggerSmartThermalFeedback` ante transiciones de estado térmico o intervalos espaciados (`12 s` `QUEMANDO`, `22 s` `CALIENTE`) para evitar fatiga auditiva en caminatas largas.
 
-- [ ] **5. Escala fina en los últimos 30 m + Linterna QR + Botón Re-centrar / Brújula**
-  - Añadir sub-progresión visual dentro de `< 30 m` (ej. pulso fino hacia `< 10 m`) sin bloquear de golpe todo el mapa al primer segundo si el jugador aún está buscando el cartel físico.
-  - Agregar control de **Linterna (Flash/Torch)** mediante `MediaTrackConstraints` en `ArcadeQrScannerModal.tsx` para drops nocturnos.
-  - Agregar botón flotante SVG **"Re-centrar en mí"** y rotación opcional por brújula (`DeviceOrientation`) en `ArcadeMap.tsx`.
+- [x] **5. Escala fina en los últimos 30 m + Linterna QR + Botón Re-centrar / Brújula** *(Completado)*
+  - Sub-progresión visual no filtrante dentro de `< 30 m` (`climaxLevel: 1 | 2 | 3` sin exponer metros exactos) con acceso no bloqueante (`Ver Radar`) y banner compacto de reapertura.
+  - Control de **Linterna (Flash/Torch)** mediante `MediaTrackConstraints` (`capabilities.torch`) en `ArcadeQrScannerModal.tsx` para drops nocturnos.
+  - Botones flotantes 100% SVG **"Re-centrar en mí"**, **Brújula (`DeviceOrientationEvent`)** y conmutador de tema visual en `ArcadeMap.tsx`.
 
-- [ ] **6. Completar spritesheets de caminata 4D (`north`, `east`, `west`)**
-  - Reemplazar los sprites estáticos con rebote `stepBob` en Norte, Este y Oeste por ciclos animados reales en `RadarCanvasOverlay.tsx` para eliminar el efecto de deslizamiento.
+- [x] **6. Completar spritesheets de caminata 4D (`north`, `east`, `west`)** *(Completado)*
+  - Reemplazados los sprites estáticos por ciclos animados PixelLab nativos de 9 fotogramas para las 4 direcciones (`walk_south`, `walk_north`, `walk_east`, `walk_west`) en `RadarCanvasOverlay.tsx`.
 
 ---
 
 ## Prioridad Media (Retención, profundidad de juego y viralidad)
 
-- [ ] **7. Micro-mecánicas activas durante la caminata (Agencia del jugador)**
-  - Incorporar un **"Pulso de Triangulación"** con cooldown (ej. cada `60 s` mostrar durante `3 s` un sector/cuadrante aproximado), hacer interactivo el congelamiento `¡BRRR!` (tocar para romper el hielo más rápido) y evaluar nodos intermedios de bonus en rutas largas.
+- [x] **7. Micro-mecánicas activas durante la caminata (Agencia del jugador)** *(Completado)*
+  - Incorporado **"Pulso de Triangulación"** (`POST /api/radar/triangulate`, cooldown `60 s`, barrido visual de sector de `45°` durante `4 s`), congelamiento interactivo `¡BRRR!` (tocar 3 veces sobre el sprite congelado para quebrar el hielo con sonido cristalino) y 2 **Balizas de Ruta** públicas por misión que suman `+1 Proof of Hunt` y reducen `-15 s` el cooldown de triangulación.
 
-- [ ] **8. Ranking (*Leaderboard*) por Marca/Ciudad e historial del cazador**
-  - Tabla pública con mejores tiempos de captura, rachas y misiones completadas para fomentar la competencia recurrente entre drops.
+- [x] **8. Ranking (*Leaderboard*) por Marca/Ciudad e historial del cazador** *(Completado)*
+  - Endpoint `GET /api/radar/leaderboard` y modal **"Salón de Cazadores"** en el HUD con mejores tiempos de captura, capturas totales, filtro por ciudad y pestaña **"Mi Historial"**.
 
-- [ ] **9. Audio en `ViralRecorder` y armonía visual HUD / Mapa**
-  - Mezclar la salida Web Audio / BGM dentro del `MediaStream` de `ViralRecorder.tsx` para exportar Reels/Stories con música Synthwave sincronizada, corregir el texto de `CALIENTE` (`30–160 m`), añadir el readout táctico y definir unificado estético entre mapa RPG diurno y HUD.
+- [x] **9. Audio en `ViralRecorder` y armonía visual HUD / Mapa** *(Completado)*
+  - Mezcla de Web Audio SFX + BGM mediante `MediaStreamAudioDestinationNode` dentro del `MediaStream` de `ViralRecorder.tsx`, corrección de etiqueta `CALIENTE (30-160M)`, readout de pista táctica/Proof of Hunt en lienzo 9:16 y armonización estética diurna/nocturna (`.rf-hud-day` / conmutador `rpg-16bit` <-> `cyberpunk-dark`).
 

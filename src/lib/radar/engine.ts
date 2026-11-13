@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type {
   Brand,
   ClaimType,
+  ClimaxLevel,
   Hunter,
   Mission,
   MissionClaim,
@@ -9,7 +10,9 @@ import type {
   RadarClaimResponse,
   RadarPingRequest,
   RadarPingResponse,
+  RouteBonusBeacon,
   ThermalState,
+  TriangulationResponse,
 } from "@/types/radar";
 import {
   findBrandBySlug,
@@ -27,8 +30,11 @@ import {
   toPrismaThermal,
 } from "@/lib/db/prisma";
 import {
+  calculateBearingDegrees,
   calculateEffectiveCaptureRadius,
   calculateHaversineMeters,
+  computeBearingSector8,
+  computeMissionBonusBeacons,
   isValidLatLng,
 } from "@/lib/radar/geo";
 import {
@@ -39,6 +45,44 @@ import {
 const ACTIVE_HUNTER_WINDOW_MS = 90_000;
 const DANGER_ZONE_METERS = 65;
 const TACTICAL_KINEMATIC_WINDOW_MS = 30_000;
+const BONUS_BEACON_CAPTURE_RADIUS_METERS = 45;
+const TRIANGULATION_COOLDOWN_MS = 60_000;
+const TRIANGULATION_SWEEP_MS = 4_000;
+const TRIANGULATION_MIN_DISTANCE_METERS = 45;
+
+const globalForEngine = globalThis as unknown as {
+  __rqTriangulationCooldown?: Map<string, number>;
+};
+
+function getTriangulationCooldownMap(): Map<string, number> {
+  if (!globalForEngine.__rqTriangulationCooldown) {
+    globalForEngine.__rqTriangulationCooldown = new Map();
+  }
+  return globalForEngine.__rqTriangulationCooldown;
+}
+
+function applyTriangulationCooldownBoost(
+  missionId: string,
+  hunterId: string,
+  boostMs: number
+): void {
+  const map = getTriangulationCooldownMap();
+  const key = `${missionId}:${hunterId}`;
+  const currentNext = map.get(key);
+  if (typeof currentNext === "number") {
+    map.set(key, Math.max(Date.now(), currentNext - boostMs));
+  }
+}
+
+function computeClimaxLevel(
+  thermalState: ThermalState,
+  distanceToSecretMeters: number
+): ClimaxLevel | null {
+  if (thermalState !== "QUEMANDO") return null;
+  if (distanceToSecretMeters < 10) return 3;
+  if (distanceToSecretMeters < 20) return 2;
+  return 1;
+}
 
 function computeThermalBracket(
   distanceMeters: number,
@@ -205,11 +249,61 @@ export async function processRadarPing(
   const roundedDist = Number(distanceToSecret.toFixed(1));
   const roundedSpeed = Number(speedKmh.toFixed(1));
   const safeAcc = Math.max(1, input.accuracy || 10);
+  const climaxLevel = computeClimaxLevel(thermalState, distanceToSecret);
+
+  const rawBeacons = computeMissionBonusBeacons(
+    mission.id,
+    mission.publicCenterLat,
+    mission.publicCenterLng,
+    mission.zoneRadiusMeters
+  );
+  let bonusNodes: RouteBonusBeacon[] = rawBeacons.map((b) => ({
+    ...b,
+    collected: false,
+  }));
+  let newlyCollectedBonusNodeId: string | null = null;
+  let triangulationCooldownBoostMs = 0;
 
   let validHuntPings = 0;
   let activeHuntersCount = 1;
   let rivalCount = 0;
   let kinematicSamples: KinematicPingSample[] = [];
+
+  const evaluateBeaconsAgainstHistory = (
+    priorWalkingCoords: Array<{ lat: number; lng: number }>
+  ): number => {
+    const collectedIds = new Set<string>();
+    for (const b of rawBeacons) {
+      const hitBefore = priorWalkingCoords.some(
+        (p) =>
+          calculateHaversineMeters(p.lat, p.lng, b.lat, b.lng) <=
+          BONUS_BEACON_CAPTURE_RADIUS_METERS
+      );
+      if (hitBefore) {
+        collectedIds.add(b.id);
+      } else if (
+        !newlyCollectedBonusNodeId &&
+        !isTeleportAnomaly &&
+        !inVehicleMode &&
+        isInsideZone &&
+        calculateHaversineMeters(input.lat, input.lng, b.lat, b.lng) <=
+          BONUS_BEACON_CAPTURE_RADIUS_METERS
+      ) {
+        collectedIds.add(b.id);
+        newlyCollectedBonusNodeId = b.id;
+        triangulationCooldownBoostMs = 15_000;
+        applyTriangulationCooldownBoost(mission.id, input.hunterId, 15_000);
+      }
+    }
+    bonusNodes = rawBeacons.map((b) => ({
+      ...b,
+      collected: collectedIds.has(b.id),
+    }));
+
+    if (isTeleportAnomaly) return 0;
+    if (newlyCollectedBonusNodeId) return 2;
+    return isInsideZone ? 1 : 0;
+  };
 
   let cloudProcessed = false;
   if (useCloud) {
@@ -218,6 +312,20 @@ export async function processRadarPing(
       const prismaThermal = toPrismaThermal(thermalState);
       const windowCutoff = new Date(nowMs - ACTIVE_HUNTER_WINDOW_MS);
       const kinematicCutoff = new Date(nowMs - TACTICAL_KINEMATIC_WINDOW_MS);
+
+      const priorWalkingPings = await prisma.hunterPing.findMany({
+        where: {
+          missionId: mission.id,
+          hunterId: input.hunterId,
+          isAnomaly: false,
+          inVehicleMode: false,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 250,
+        select: { lat: true, lng: true },
+      });
+
+      const validPingIncrement = evaluateBeaconsAgainstHistory(priorWalkingPings);
 
       // Ensure hunter FK exists in cloud DB
       await prisma.hunter.upsert({
@@ -267,8 +375,8 @@ export async function processRadarPing(
               pingCount: { increment: 1 },
               ...(isTeleportAnomaly
                 ? { anomalyFlags: { increment: 1 } }
-                : isInsideZone
-                ? { validHuntPings: { increment: 1 } }
+                : validPingIncrement > 0
+                ? { validHuntPings: { increment: validPingIncrement } }
                 : {}),
               lastPingAt: new Date(nowMs),
             },
@@ -284,7 +392,7 @@ export async function processRadarPing(
               inVehicleMode,
               thermalState: prismaThermal,
               pingCount: 1,
-              validHuntPings: !isTeleportAnomaly && isInsideZone ? 1 : 0,
+              validHuntPings: validPingIncrement,
               anomalyFlags: isTeleportAnomaly ? 1 : 0,
               firstPingAt: new Date(nowMs),
               lastPingAt: new Date(nowMs),
@@ -351,6 +459,15 @@ export async function processRadarPing(
 
   if (!cloudProcessed) {
     const db = getDb();
+    const priorWalkingPings = db.hunterPings.filter(
+      (p) =>
+        p.missionId === mission.id &&
+        p.hunterId === input.hunterId &&
+        !p.isAnomaly &&
+        !p.inVehicleMode
+    );
+    const validPingIncrement = evaluateBeaconsAgainstHistory(priorWalkingPings);
+
     // Append individual HunterPing record (keep capped at last 500 pings in local JSON store)
     db.hunterPings.unshift({
       id: `png_${crypto.randomUUID().slice(0, 10)}`,
@@ -388,7 +505,7 @@ export async function processRadarPing(
         inVehicleMode,
         thermalState,
         pingCount: 1,
-        validHuntPings: !isTeleportAnomaly && isInsideZone ? 1 : 0,
+        validHuntPings: validPingIncrement,
         anomalyFlags: isTeleportAnomaly ? 1 : 0,
         firstPingAt: nowIso,
         lastPingAt: nowIso,
@@ -406,8 +523,8 @@ export async function processRadarPing(
       telemetry.pingCount += 1;
       if (isTeleportAnomaly) {
         telemetry.anomalyFlags += 1;
-      } else if (isInsideZone) {
-        telemetry.validHuntPings += 1;
+      } else if (validPingIncrement > 0) {
+        telemetry.validHuntPings += validPingIncrement;
       }
       telemetry.lastPingAt = nowIso;
     }
@@ -531,6 +648,7 @@ export async function processRadarPing(
     ok: true,
     thermalState,
     heatIntensity,
+    climaxLevel,
     inVehicleMode,
     speedKmh: roundedSpeed,
     vehicleMessage,
@@ -544,12 +662,100 @@ export async function processRadarPing(
       requiredPings: mission.minPingsForMajorPrize,
       ready: validHuntPings >= mission.minPingsForMajorPrize,
     },
+    bonusNodes,
+    newlyCollectedBonusNodeId,
+    triangulationCooldownBoostMs,
     canOpenQrScanner,
     canClaimPresential,
     validationMode,
     missionStatus: mission.status,
     winnerAlias: mission.winnerAlias,
     serverTimestamp: nowIso,
+  };
+}
+
+/**
+ * Active Triangulation Pulse (server-enforced 60s cooldown):
+ * Returns ONLY a coarse 45-degree sector sweep toward the target when distance >= 45m
+ * inside the mission zone. Never exposes raw coordinates or distance in meters.
+ */
+export async function processRadarTriangulation(input: {
+  missionId: string;
+  hunterId: string;
+  lat: number;
+  lng: number;
+}): Promise<TriangulationResponse> {
+  const nowMs = Date.now();
+  if (!isValidLatLng(input.lat, input.lng)) {
+    return {
+      ok: false,
+      message: "Coordenadas GPS inválidas para triangular.",
+    };
+  }
+
+  const cooldownMap = getTriangulationCooldownMap();
+  const key = `${input.missionId}:${input.hunterId}`;
+  const nextAvailableAtMs = cooldownMap.get(key) || 0;
+  if (nowMs < nextAvailableAtMs) {
+    const remainingSec = Math.max(1, Math.ceil((nextAvailableAtMs - nowMs) / 1000));
+    return {
+      ok: false,
+      cooldownRemainingSeconds: remainingSec,
+      nextAvailableAtMs,
+      message: `Recargando pulso de triangulación (${remainingSec}s).`,
+    };
+  }
+
+  const mission = await findMissionById(input.missionId);
+  if (!mission) {
+    return { ok: false, message: "Misión no encontrada." };
+  }
+  if (mission.status !== "ACTIVE") {
+    return { ok: false, message: "La misión ya no está activa." };
+  }
+
+  const distMeters = calculateHaversineMeters(
+    input.lat,
+    input.lng,
+    mission.secretLat,
+    mission.secretLng
+  );
+
+  if (distMeters > mission.zoneRadiusMeters) {
+    return {
+      ok: false,
+      message: "Acercate a la zona del drop antes de emitir el pulso de triangulación.",
+    };
+  }
+
+  if (distMeters < TRIANGULATION_MIN_DISTANCE_METERS) {
+    return {
+      ok: false,
+      message:
+        "Ya estás a corta distancia (<45m): guiáte por las ondas térmicas ¡CALIENTE!/¡QUEMANDO!.",
+    };
+  }
+
+  const rawBearing = calculateBearingDegrees(
+    input.lat,
+    input.lng,
+    mission.secretLat,
+    mission.secretLng
+  );
+  const sector = computeBearingSector8(rawBearing);
+  const newNextAvailableAtMs = nowMs + TRIANGULATION_COOLDOWN_MS;
+  cooldownMap.set(key, newNextAvailableAtMs);
+
+  return {
+    ok: true,
+    sectorCode: sector.sectorCode,
+    sectorLabel: sector.sectorLabel,
+    centerBearingDeg: sector.centerBearingDeg,
+    sweepArcDeg: 45,
+    cooldownRemainingSeconds: Math.round(TRIANGULATION_COOLDOWN_MS / 1000),
+    nextAvailableAtMs: newNextAvailableAtMs,
+    expiresAtMs: nowMs + TRIANGULATION_SWEEP_MS,
+    message: `PULSO DE TRIANGULACIÓN: señal intensa detectada hacia el sector ${sector.sectorLabel.toUpperCase()} (${sector.sectorCode}).`,
   };
 }
 

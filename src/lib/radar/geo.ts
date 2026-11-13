@@ -335,6 +335,103 @@ export function rankMissionsByProximity<T extends MissionProximityCandidate>(
 }
 
 /**
+ * Generates a deterministic coordinate offset from an origin point given bearing & meters.
+ */
+export function offsetCoordsByBearingMeters(
+  originLat: number,
+  originLng: number,
+  bearingDeg: number,
+  distanceMeters: number
+): { lat: number; lng: number } {
+  const rad = toRadians(bearingDeg);
+  const dLat = (distanceMeters * Math.cos(rad)) / 111_320;
+  const cosLat = Math.max(0.15, Math.cos(toRadians(originLat)));
+  const dLng = (distanceMeters * Math.sin(rad)) / (111_320 * cosLat);
+
+  return {
+    lat: Number((originLat + dLat).toFixed(6)),
+    lng: Number((originLng + dLng).toFixed(6)),
+  };
+}
+
+export interface DeterministicBonusBeacon {
+  id: string;
+  label: string;
+  lat: number;
+  lng: number;
+}
+
+/**
+ * Generates 2 deterministic public-zone route bonus beacons strictly from the public zone center
+ * and mission ID (NEVER derived from secretLat/secretLng).
+ */
+export function computeMissionBonusBeacons(
+  missionId: string,
+  publicCenterLat: number,
+  publicCenterLng: number,
+  zoneRadiusMeters: number
+): DeterministicBonusBeacon[] {
+  let hash = 2166136261;
+  for (let i = 0; i < missionId.length; i++) {
+    hash ^= missionId.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  const maxOffset = Math.max(120, Math.min(460, zoneRadiusMeters * 0.62));
+  const minOffset = Math.min(maxOffset - 20, Math.max(95, zoneRadiusMeters * 0.25));
+  const span = Math.max(25, maxOffset - minOffset);
+
+  const angle1 = Math.abs(hash) % 360;
+  const dist1 = minOffset + (Math.abs(hash >>> 8) % span);
+  const pos1 = offsetCoordsByBearingMeters(publicCenterLat, publicCenterLng, angle1, dist1);
+
+  const angle2 = (angle1 + 135 + (Math.abs(hash >>> 12) % 85)) % 360;
+  const dist2 = minOffset + (Math.abs(hash >>> 16) % span);
+  const pos2 = offsetCoordsByBearingMeters(publicCenterLat, publicCenterLng, angle2, dist2);
+
+  return [
+    {
+      id: `${missionId}:beacon_alpha`,
+      label: "BALIZA ALFA",
+      lat: pos1.lat,
+      lng: pos1.lng,
+    },
+    {
+      id: `${missionId}:beacon_beta`,
+      label: "BALIZA BETA",
+      lat: pos2.lat,
+      lng: pos2.lng,
+    },
+  ];
+}
+
+export interface BearingSector8 {
+  sectorCode: "N" | "NE" | "E" | "SE" | "S" | "SO" | "O" | "NO";
+  sectorLabel: string;
+  centerBearingDeg: number;
+}
+
+const SECTORS_8: BearingSector8[] = [
+  { sectorCode: "N", sectorLabel: "Norte", centerBearingDeg: 0 },
+  { sectorCode: "NE", sectorLabel: "Noreste", centerBearingDeg: 45 },
+  { sectorCode: "E", sectorLabel: "Este", centerBearingDeg: 90 },
+  { sectorCode: "SE", sectorLabel: "Sureste", centerBearingDeg: 135 },
+  { sectorCode: "S", sectorLabel: "Sur", centerBearingDeg: 180 },
+  { sectorCode: "SO", sectorLabel: "Suroeste", centerBearingDeg: 225 },
+  { sectorCode: "O", sectorLabel: "Oeste", centerBearingDeg: 270 },
+  { sectorCode: "NO", sectorLabel: "Noroeste", centerBearingDeg: 315 },
+];
+
+/**
+ * Maps an exact bearing into a coarse 45-degree sector (zero exact coordinate leakage).
+ */
+export function computeBearingSector8(bearingDeg: number): BearingSector8 {
+  const normalized = ((bearingDeg % 360) + 360) % 360;
+  const idx = Math.floor(((normalized + 22.5) % 360) / 45);
+  return SECTORS_8[idx] || SECTORS_8[0];
+}
+
+/**
  * Picks the closest ACTIVE mission (or closest mission overall if none are ACTIVE).
  */
 export function pickNearestMission<T extends MissionProximityCandidate>(

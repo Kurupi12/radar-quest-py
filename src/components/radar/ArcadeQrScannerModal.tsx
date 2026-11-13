@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Flame,
+  Flashlight,
   RefreshCw,
   Sparkles,
   Trophy,
@@ -176,13 +177,35 @@ export function ArcadeQrScannerModal({
   );
   const [manualCode, setManualCode] = useState(demoTokenHint);
   const [retryCount, setRetryCount] = useState(0);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchEnabled, setTorchEnabled] = useState(false);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    setTorchEnabled(false);
+    setTorchSupported(false);
   }, []);
+
+  const toggleTorch = useCallback(async () => {
+    const stream = streamRef.current;
+    if (!stream) return;
+    const videoTrack = stream.getVideoTracks()[0];
+    if (!videoTrack) return;
+
+    const nextTorch = !torchEnabled;
+    try {
+      await videoTrack.applyConstraints({
+        advanced: [{ torch: nextTorch }],
+      } as unknown as MediaTrackConstraints);
+      setTorchEnabled(nextTorch);
+    } catch {
+      setTorchSupported(false);
+      setTorchEnabled(false);
+    }
+  }, [torchEnabled]);
 
   const submitDecodedToken = useCallback(
     async (rawQrValue: string) => {
@@ -290,6 +313,19 @@ export function ArcadeQrScannerModal({
         }
 
         streamRef.current = stream;
+        const primaryVideoTrack = stream.getVideoTracks()[0];
+        if (primaryVideoTrack && typeof primaryVideoTrack.getCapabilities === "function") {
+          try {
+            const caps = primaryVideoTrack.getCapabilities() as MediaTrackCapabilities & {
+              torch?: boolean;
+            };
+            if (caps && Boolean(caps.torch)) {
+              setTorchSupported(true);
+            }
+          } catch {
+            setTorchSupported(false);
+          }
+        }
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => {});
@@ -475,10 +511,27 @@ export function ArcadeQrScannerModal({
                 </div>
               </div>
 
-              {/* Engine Telemetry Badge */}
-              <div className="absolute bottom-2 inset-x-2 flex items-center justify-between px-2.5 py-1 rounded bg-[#0c051c]/90 border border-purple-500/40 text-[9px] font-mono text-cyan-300">
-                <span>{engineLabel}</span>
-                <span className="text-amber-300 animate-pulse">● SCANNING</span>
+              {/* Engine Telemetry Badge & Torch Control */}
+              <div className="absolute bottom-2 inset-x-2 flex items-center justify-between gap-2 px-2.5 py-1 rounded bg-[#0c051c]/90 border border-purple-500/40 text-[9px] font-mono text-cyan-300">
+                <span className="truncate">{engineLabel}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {torchSupported && (
+                    <button
+                      type="button"
+                      onClick={toggleTorch}
+                      aria-label={torchEnabled ? "Apagar linterna" : "Encender linterna"}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[9px] font-bold transition cursor-pointer ${
+                        torchEnabled
+                          ? "bg-amber-400 text-slate-950 border-amber-300"
+                          : "bg-slate-900/90 text-slate-200 border-slate-600 hover:border-cyan-400"
+                      }`}
+                    >
+                      <Flashlight className="w-3 h-3" />
+                      {torchEnabled ? "FLASH ON" : "LINTERNA"}
+                    </button>
+                  )}
+                  <span className="text-amber-300 animate-pulse">● SCANNING</span>
+                </div>
               </div>
 
               {claiming && (
